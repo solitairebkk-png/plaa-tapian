@@ -422,14 +422,14 @@ function Products({data,gasUrl,reload,showToast,categories}) {
 }
 
 function Sales({data,gasUrl,reloadProducts,showToast}) {
-  const [selId,  setSelId]  = useState('');
-  const [qty,    setQty]    = useState(1);
-  const [isSmp,  setIsSmp]  = useState(false);
-  const [loading,setLoading]= useState(false);
-  // 明細はuseRefで保持（再レンダリングされても消えない）
-  const [lines,  setLines]  = useState([]);
+  const [selId,    setSelId]    = useState('');
+  const [qty,      setQty]      = useState(1);
+  const [stype,    setStype]    = useState('normal'); // normal / sample / discount
+  const [discType, setDiscType] = useState('amount'); // amount / percent
+  const [discVal,  setDiscVal]  = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [lines,    setLines]    = useState([]);
 
-  // 販売数降順でソートされた商品リスト
   const sortedProducts = [...data.products].sort((a,b)=>{
     const aQty = data.sales.filter(s=>s.name===a.name).reduce((x,s)=>x+s.qty,0);
     const bQty = data.sales.filter(s=>s.name===b.name).reduce((x,s)=>x+s.qty,0);
@@ -438,53 +438,73 @@ function Sales({data,gasUrl,reloadProducts,showToast}) {
 
   const selProduct = data.products.find(p=>p.id===selId);
 
+  // 実際の販売価格を計算
+  const calcActualPrice = () => {
+    if (!selProduct) return 0;
+    if (stype !== 'discount') return selProduct.price;
+    const base = selProduct.price;
+    if (discType === 'percent') {
+      const pct = parseFloat(discVal)||0;
+      return Math.round(base * (1 - pct/100));
+    } else {
+      return Math.max(0, base - (parseFloat(discVal)||0));
+    }
+  };
+  const actualPrice = calcActualPrice();
+
   const addLine = async () => {
     if (!selId) return showToast('商品を選択してください');
     if (!qty || qty < 1) return showToast('数量を入力してください');
     if (selProduct && selProduct.stock < qty) return showToast(`在庫不足（残${selProduct.stock}個）`);
+    if (stype === 'discount' && !discVal) return showToast('割引額または割引率を入力してください');
     setLoading(true);
-    if (isSmp) {
+
+    if (stype === 'sample') {
       await apiPost(gasUrl,{action:'recordSamples',samples:[{id:selId,qty:Number(qty)}]});
     } else {
-      await apiPost(gasUrl,{action:'recordSales',sales:[{id:selId,qty:Number(qty)}]});
+      // 通常販売もディスカウントも売上として記録（価格が違うだけ）
+      await apiPost(gasUrl,{action:'recordSales',sales:[{id:selId,qty:Number(qty),actualPrice}]});
     }
+
     const now = new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
     setLines(prev=>[...prev,{
       id: Date.now(),
       productId: selId,
       name: selProduct.name,
-      price: selProduct.price,
+      price: actualPrice,
+      listPrice: selProduct.price,
       cost: selProduct.cost,
       group: selProduct.group,
       qty: Number(qty),
-      isSmp,
+      stype,
+      discType: stype==='discount'?discType:null,
+      discVal:  stype==='discount'?discVal:null,
       time: now,
     }]);
-    setSelId(''); setQty(1); setIsSmp(false);
+    setSelId(''); setQty(1); setStype('normal'); setDiscVal('');
     setLoading(false);
     showToast(`「${selProduct.name}」${qty}個を記録しました`);
-    reloadProducts(); // 在庫数だけ更新（明細は消えない）
+    reloadProducts();
   };
 
   const deleteLine = async (line) => {
     if (!confirm(`「${line.name}」×${line.qty}個の記録を削除しますか？\n在庫が${line.qty}個戻ります。`)) return;
-    // 在庫を戻す
-    await apiPost(gasUrl,{action: line.isSmp ? 'revertSample' : 'revertSale', id: line.productId, qty: line.qty});
+    await apiPost(gasUrl,{action: line.stype==='sample' ? 'revertSample' : 'revertSale', id: line.productId, qty: line.qty});
     setLines(prev=>prev.filter(l=>l.id!==line.id));
     showToast('削除しました（在庫を戻しました）');
     reloadProducts();
   };
 
-  const todayRev = lines.filter(l=>!l.isSmp).reduce((a,l)=>a+l.price*l.qty,0);
-  const todayGP  = lines.filter(l=>!l.isSmp).reduce((a,l)=>a+(l.price-l.cost)*l.qty,0);
-  const todaySmp = lines.filter(l=>l.isSmp).reduce((a,l)=>a+l.qty,0);
+  const todayRev = lines.filter(l=>l.stype!=='sample').reduce((a,l)=>a+l.price*l.qty,0);
+  const todayGP  = lines.filter(l=>l.stype!=='sample').reduce((a,l)=>a+(l.price-l.cost)*l.qty,0);
+  const todaySmp = lines.filter(l=>l.stype==='sample').reduce((a,l)=>a+l.qty,0);
+  const todayDisc= lines.filter(l=>l.stype==='discount').reduce((a,l)=>a+(l.listPrice-l.price)*l.qty,0);
 
   return (
     <div>
-      {/* 入力フォーム */}
       <div className="card">
         <div className="card-title">売上入力 — {todayStr()}</div>
-        <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:14}}>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:10}}>
           <div className="form-group" style={{flex:'2 1 200px',margin:0}}>
             <label>商品選択</label>
             <select value={selId} onChange={e=>setSelId(e.target.value)}>
@@ -496,25 +516,55 @@ function Sales({data,gasUrl,reloadProducts,showToast}) {
               ))}
             </select>
           </div>
-          <div className="form-group" style={{flex:'0 0 90px',margin:0}}>
+          <div className="form-group" style={{flex:'0 0 80px',margin:0}}>
             <label>数量</label>
             <input type="number" min="1" value={qty} onChange={e=>setQty(parseInt(e.target.value)||1)} style={{textAlign:'center'}}/>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:12,padding:'0 4px',paddingBottom:2}}>
-            <label style={{display:'flex',alignItems:'center',gap:5,fontSize:13,cursor:'pointer'}}>
-              <input type="radio" name="stype" checked={!isSmp} onChange={()=>setIsSmp(false)}/> 通常販売
-            </label>
-            <label style={{display:'flex',alignItems:'center',gap:5,fontSize:13,cursor:'pointer',color:'#8B2E8B'}}>
-              <input type="radio" name="stype" checked={isSmp} onChange={()=>setIsSmp(true)}/> サンプル
-            </label>
-          </div>
-          <button className="btn btn-primary" onClick={addLine} disabled={loading} style={{whiteSpace:'nowrap'}}>
+          <button className="btn btn-primary" onClick={addLine} disabled={loading} style={{whiteSpace:'nowrap',alignSelf:'flex-end'}}>
             {loading?'処理中...':'＋ 追加'}
           </button>
         </div>
+
+        {/* 種別選択 */}
+        <div style={{display:'flex',gap:16,marginBottom:10,flexWrap:'wrap'}}>
+          {[['normal','通常販売','var(--teal)'],['discount','ディスカウント','#B8860B'],['sample','サンプル','#8B2E8B']].map(([v,label,color])=>(
+            <label key={v} style={{display:'flex',alignItems:'center',gap:5,fontSize:13,cursor:'pointer',color:stype===v?color:'var(--muted)',fontWeight:stype===v?600:400}}>
+              <input type="radio" name="stype" checked={stype===v} onChange={()=>setStype(v)}/> {label}
+            </label>
+          ))}
+        </div>
+
+        {/* ディスカウント入力欄 */}
+        {stype==='discount' && selProduct && (
+          <div style={{background:'#FFFBEA',border:'1px solid #F0D060',borderRadius:8,padding:'10px 14px',marginBottom:10}}>
+            <div style={{fontSize:12,color:'#8a6a1a',marginBottom:8,fontWeight:600}}>ディスカウント設定 — 定価 {THB(selProduct.price)}</div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+              <select value={discType} onChange={e=>setDiscType(e.target.value)} style={{width:120,fontSize:13}}>
+                <option value="amount">金額で指定</option>
+                <option value="percent">割引率(%)で指定</option>
+              </select>
+              <input type="number" min="0" value={discVal} onChange={e=>setDiscVal(e.target.value)}
+                placeholder={discType==='percent'?'例: 20':'例: 50'}
+                style={{width:120,fontSize:13}}/>
+              <span style={{fontSize:12,color:'#8a6a1a'}}>
+                {discType==='percent' && discVal ? `${discVal}% OFF` : ''}
+              </span>
+              {discVal && (
+                <div style={{fontSize:13,fontWeight:600,color:'#B8860B'}}>
+                  実際の販売価格: {THB(actualPrice)}
+                  <span style={{fontSize:11,color:'var(--muted)',marginLeft:8}}>
+                    (割引額: {THB(selProduct.price - actualPrice)})
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {selProduct && (
-          <div style={{fontSize:12,color:'var(--muted)',marginBottom:8,padding:'6px 10px',background:'var(--bg)',borderRadius:6}}>
-            {selProduct.name} — 販売価格 {THB(selProduct.price)} / 仕入 {THB(selProduct.cost)} / 利益率 {selProduct.price>0?((selProduct.price-selProduct.cost)/selProduct.price*100).toFixed(1):'0'}%
+          <div style={{fontSize:12,color:'var(--muted)',marginBottom:4,padding:'6px 10px',background:'var(--bg)',borderRadius:6}}>
+            {selProduct.name} — 定価 {THB(selProduct.price)} / 仕入 {THB(selProduct.cost)} / 利益率 {selProduct.price>0?((selProduct.price-selProduct.cost)/selProduct.price*100).toFixed(1):'0'}%
+            {stype==='discount' && discVal && <span style={{color:'#B8860B',marginLeft:8,fontWeight:600}}>→ 販売価格 {THB(actualPrice)} / 粗利 {THB(actualPrice-selProduct.cost)}</span>}
           </div>
         )}
       </div>
@@ -524,19 +574,24 @@ function Sales({data,gasUrl,reloadProducts,showToast}) {
         <div className="card">
           <div className="card-title">本日の入力済み明細</div>
           <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>時刻</th><th>商品名</th><th>G</th><th>種別</th><th>数量</th><th>小計</th><th></th></tr></thead>
+            <thead><tr><th>時刻</th><th>商品名</th><th>G</th><th>種別</th><th>数量</th><th>販売価格</th><th>小計</th><th></th></tr></thead>
             <tbody>
               {lines.map(l=>(
                 <tr key={l.id}>
                   <td style={{fontSize:11,color:'var(--hint)'}}>{l.time}</td>
                   <td>{l.name}</td>
                   <td><GBadge g={l.group}/></td>
-                  <td>{l.isSmp
-                    ? <span className="badge" style={{background:'#F0E6F6',color:'#8B2E8B'}}>サンプル</span>
-                    : <span className="badge badge-ok">販売</span>}
-                  </td>
+                  <td>{
+                    l.stype==='sample'   ? <span className="badge" style={{background:'#F0E6F6',color:'#8B2E8B'}}>サンプル</span> :
+                    l.stype==='discount' ? <span className="badge" style={{background:'#FFFBEA',color:'#B8860B'}}>割引{l.discType==='percent'?` ${l.discVal}%OFF`:''}</span> :
+                    <span className="badge badge-ok">通常</span>
+                  }</td>
                   <td style={{textAlign:'center'}}>{l.qty}</td>
-                  <td>{l.isSmp ? <span style={{color:'var(--muted)',fontSize:12}}>—</span> : THB(l.price*l.qty)}</td>
+                  <td style={{fontSize:12}}>
+                    {l.stype==='sample' ? '—' : THB(l.price)}
+                    {l.stype==='discount' && <div style={{fontSize:10,color:'var(--hint)',textDecoration:'line-through'}}>{THB(l.listPrice)}</div>}
+                  </td>
+                  <td>{l.stype==='sample' ? <span style={{color:'var(--muted)',fontSize:12}}>—</span> : THB(l.price*l.qty)}</td>
                   <td><button className="btn btn-sm btn-danger" onClick={()=>deleteLine(l)}>削除</button></td>
                 </tr>
               ))}
@@ -550,8 +605,14 @@ function Sales({data,gasUrl,reloadProducts,showToast}) {
               </tr>
               {todaySmp > 0 && (
                 <tr style={{background:'var(--bg)'}}>
-                  <td colSpan="5" style={{textAlign:'right',fontSize:12,color:'#8B2E8B'}}>サンプル合計</td>
+                  <td colSpan="6" style={{textAlign:'right',fontSize:12,color:'#8B2E8B'}}>サンプル合計</td>
                   <td style={{fontSize:12,color:'#8B2E8B'}}>{todaySmp}個</td><td></td>
+                </tr>
+              )}
+              {todayDisc > 0 && (
+                <tr style={{background:'var(--bg)'}}>
+                  <td colSpan="6" style={{textAlign:'right',fontSize:12,color:'#B8860B'}}>割引合計</td>
+                  <td style={{fontSize:12,color:'#B8860B'}}>▲{THB(todayDisc)}</td><td></td>
                 </tr>
               )}
             </tbody>
