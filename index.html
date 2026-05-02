@@ -290,7 +290,7 @@ function App() {
         }} showToast={showToast}/>
       </div>
       {!loading&&tab==='restock'   && <Restock   data={data} gasUrl={gasUrl} reload={load} showToast={showToast}/>}
-      {!loading&&tab==='report'    && <Report    data={data}/>}
+      {!loading&&tab==='report'    && <Report    data={data} gasUrl={gasUrl} showToast={showToast}/>}
       {!loading&&tab==='memo'      && <Memo      data={data} gasUrl={gasUrl} reload={load} showToast={showToast}/>}
       {tab==='settings' && (
         <div>
@@ -673,83 +673,241 @@ function Restock({data,gasUrl,reload,showToast}) {
   );
 }
 
-function Report({data}) {
-  const [gf,setGf]         = useState('all');
-  const [period,setPeriod] = useState('daily');
+function MiniBarChart({data, labelKey, valueKey, color='#1a3d16', maxItems=10}) {
+  const items = data.slice(0,maxItems);
+  const maxVal = Math.max(...items.map(d=>d[valueKey]),1);
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+      {items.map((d,i)=>(
+        <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{width:120,fontSize:11,color:'#333',textAlign:'right',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d[labelKey]}</div>
+          <div style={{flex:1,background:'#f0ede0',borderRadius:4,height:20,position:'relative'}}>
+            <div style={{width:`${(d[valueKey]/maxVal)*100}%`,background:color,borderRadius:4,height:'100%',minWidth:2,transition:'width 0.4s'}}/>
+          </div>
+          <div style={{width:80,fontSize:11,fontWeight:600,color,flexShrink:0}}>{THB(d[valueKey])}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Report({data, gasUrl, showToast}) {
+  const [gf,setGf]           = useState('all');
+  const [selMonth,setSelMonth]= useState('');
+  const [exporting,setExporting]= useState(false);
 
   const fs = gf==='all'?data.sales:data.sales.filter(s=>s.group===gf);
   const totalRev  = fs.reduce((a,s)=>a+s.price*s.qty,0);
   const totalGP   = fs.reduce((a,s)=>a+Number(s.gp),0);
   const totalRate = totalRev>0?totalGP/totalRev:0;
 
-  // 日次
-  const dates = [...new Set(fs.map(s=>s.date))].filter(Boolean).sort().slice(-14).reverse();
-  const daily = dates.map(date=>{
-    const logs=fs.filter(s=>s.date===date);
-    const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
-    const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
-    return {date,rev,gp,rate:rev>0?gp/rev:0};
-  });
-
-  // 月次
+  // 月次データ
   const months = [...new Set(fs.map(s=>s.date?.slice(0,7)))].filter(Boolean).sort().reverse();
   const monthly = months.map(m=>{
     const logs=fs.filter(s=>s.date?.startsWith(m));
+    const aLogs=logs.filter(s=>(s.group||'A')==='A');
+    const kLogs=logs.filter(s=>(s.group||'A')==='K');
     const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
     const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
-    return {month:m,rev,gp,rate:rev>0?gp/rev:0};
+    const aRev=aLogs.reduce((a,s)=>a+s.price*s.qty,0);
+    const kRev=kLogs.reduce((a,s)=>a+s.price*s.qty,0);
+    return {month:m,rev,gp,rate:rev>0?gp/rev:0,aRev,kRev,count:logs.length};
   });
 
-  // 商品別
-  const prods = data.products
-    .filter(p=>gf==='all'||(p.group||'A')===gf)
-    .map(p=>{
-      const logs=data.sales.filter(s=>s.name===p.name);
-      const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
-      const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
-      return {...p,soldQty:logs.reduce((a,s)=>a+s.qty,0),rev,gp,rate:rev>0?gp/rev:0};
-    }).sort((a,b)=>b.rev-a.rev);
+  // 選択月（デフォルト最新月）
+  const currentMonth = selMonth || months[0] || '';
+  const monthLogs = fs.filter(s=>s.date?.startsWith(currentMonth));
+  const monthRev  = monthLogs.reduce((a,s)=>a+s.price*s.qty,0);
+  const monthGP   = monthLogs.reduce((a,s)=>a+Number(s.gp),0);
+  const monthRate = monthRev>0?monthGP/monthRev:0;
+  const monthALogs= monthLogs.filter(s=>(s.group||'A')==='A');
+  const monthKLogs= monthLogs.filter(s=>(s.group||'A')==='K');
+  const monthARev = monthALogs.reduce((a,s)=>a+s.price*s.qty,0);
+  const monthKRev = monthKLogs.reduce((a,s)=>a+s.price*s.qty,0);
+
+  // 商品別（選択月）
+  const prodStats = data.products.map(p=>{
+    const logs=monthLogs.filter(s=>s.name===p.name);
+    const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
+    const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
+    return {...p,soldQty:logs.reduce((a,s)=>a+s.qty,0),rev,gp,rate:rev>0?gp/rev:0};
+  }).filter(p=>p.rev>0).sort((a,b)=>b.rev-a.rev);
+
+  // 全期間商品別
+  const allProdStats = data.products.map(p=>{
+    const logs=fs.filter(s=>s.name===p.name);
+    const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
+    const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
+    return {...p,soldQty:logs.reduce((a,s)=>a+s.qty,0),rev,gp,rate:rev>0?gp/rev:0};
+  }).sort((a,b)=>b.rev-a.rev);
+
+  // PDF印刷
+  const printReport = () => {
+    const win = window.open('','_blank');
+    const rows = prodStats.map(p=>`
+      <tr>
+        <td>${p.name}</td><td>${p.group}</td><td>${p.soldQty}</td>
+        <td>฿${p.rev.toLocaleString()}</td>
+        <td>฿${p.gp.toLocaleString()}</td>
+        <td>${(p.rate*100).toFixed(1)}%</td>
+      </tr>`).join('');
+    win.document.write(`
+      <html><head><title>月次レポート ${currentMonth}</title>
+      <style>
+        body{font-family:'Hiragino Sans',sans-serif;padding:24px;color:#1a1a18;}
+        h1{font-size:20px;color:#1a3d16;border-bottom:2px solid #C8A84B;padding-bottom:8px;}
+        h2{font-size:14px;color:#1a3d16;margin:16px 0 8px;}
+        .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0;}
+        .metric{border:2px solid #1a3d16;border-radius:8px;padding:10px;text-align:center;}
+        .metric-label{font-size:11px;color:#5a7a56;}
+        .metric-value{font-size:18px;font-weight:700;color:#1a3d16;}
+        .group-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;}
+        .group-box{border:2px solid #1a3d16;border-radius:8px;padding:10px;}
+        table{width:100%;border-collapse:collapse;font-size:12px;}
+        th{background:#1a3d16;color:#fff;padding:6px 8px;text-align:left;}
+        td{padding:6px 8px;border-bottom:1px solid #e0e8d8;}
+        .positive{color:#1a5c14;} .footer{margin-top:24px;font-size:11px;color:#999;}
+        @media print{body{padding:12px;}}
+      </style></head><body>
+      <h1>📊 Plaa Tapian — 月次レポート ${currentMonth}</h1>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">売上合計</div><div class="metric-value">฿${monthRev.toLocaleString()}</div></div>
+        <div class="metric"><div class="metric-label">粗利合計</div><div class="metric-value positive">฿${monthGP.toLocaleString()}</div></div>
+        <div class="metric"><div class="metric-label">粗利率</div><div class="metric-value">${(monthRate*100).toFixed(1)}%</div></div>
+        <div class="metric"><div class="metric-label">取引件数</div><div class="metric-value">${monthLogs.length}件</div></div>
+      </div>
+      <div class="group-row">
+        <div class="group-box"><div class="metric-label">A グループ（正規）</div><div class="metric-value">฿${monthARev.toLocaleString()}</div></div>
+        <div class="group-box"><div class="metric-label">K グループ（非正規）</div><div class="metric-value">฿${monthKRev.toLocaleString()}</div></div>
+      </div>
+      <h2>商品別売上</h2>
+      <table><thead><tr><th>商品名</th><th>G</th><th>販売数</th><th>売上</th><th>粗利</th><th>粗利率</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div class="footer">出力日時: ${new Date().toLocaleString('ja-JP')} — Plaa Tapian 在庫管理システム</div>
+      </body></html>`);
+    win.document.close();
+    setTimeout(()=>win.print(), 500);
+  };
+
+  // スプレッドシートに月次サマリーを出力
+  const exportToSheet = async () => {
+    if (!currentMonth) return showToast('月を選択してください');
+    setExporting(true);
+    const summary = {
+      month: currentMonth,
+      totalRev: monthRev,
+      totalGP: monthGP,
+      totalRate: Math.round(monthRate*1000)/10,
+      aRev: monthARev,
+      kRev: monthKRev,
+      txCount: monthLogs.length,
+      products: prodStats.map(p=>({name:p.name,qty:p.soldQty,rev:p.rev,gp:p.gp}))
+    };
+    await apiPost(gasUrl,{action:'exportMonthlyReport',summary});
+    setExporting(false);
+    showToast(`${currentMonth}の月次レポートをスプレッドシートに出力しました`);
+  };
 
   return (
     <div>
       <GroupTabs value={gf} onChange={setGf} labels={[['all','A + K 合算'],['A','A グループ'],['K','K グループ']]}/>
 
+      {/* サマリーメトリクス */}
       <div className="metrics">
         <div className="metric"><div className="metric-label">売上合計(30日)</div><div className="metric-value">{THB(totalRev)}</div></div>
         <div className="metric"><div className="metric-label">粗利合計(30日)</div><div className={`metric-value ${totalGP>=0?'positive':'negative'}`}>{THB(totalGP)}</div></div>
         <div className="metric"><div className="metric-label">平均粗利率</div><div className="metric-value">{PCT(totalRate)}</div></div>
-        <div className="metric"><div className="metric-label">商品数</div><div className="metric-value">{prods.length}</div></div>
+        <div className="metric"><div className="metric-label">商品数</div><div className="metric-value">{allProdStats.filter(p=>p.rev>0).length}</div></div>
       </div>
 
-      <GroupTabs value={period} onChange={setPeriod} labels={[['daily','日次'],['monthly','月次']]}/>
-
-      {period==='daily' && (
+      {/* 月次推移グラフ */}
+      {monthly.length > 0 && (
         <div className="card">
-          <div className="card-title">日次売上 — 直近14日</div>
-          {daily.length===0?<div className="empty">データがありません</div>:
-          <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>日付</th><th>売上</th><th>粗利</th><th>粗利率</th></tr></thead>
-            <tbody>{daily.map(r=><tr key={r.date}><td>{r.date}</td><td>{THB(r.rev)}</td><td className={r.gp>=0?'positive':'negative'}>{THB(r.gp)}</td><td>{PCT(r.rate)}</td></tr>)}</tbody>
-          </table></div>}
-        </div>
-      )}
-      {period==='monthly' && (
-        <div className="card">
-          <div className="card-title">月次売上</div>
-          {monthly.length===0?<div className="empty">データがありません</div>:
-          <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>月</th><th>売上</th><th>粗利</th><th>粗利率</th></tr></thead>
-            <tbody>{monthly.map(r=><tr key={r.month}><td>{r.month}</td><td>{THB(r.rev)}</td><td className={r.gp>=0?'positive':'negative'}>{THB(r.gp)}</td><td>{PCT(r.rate)}</td></tr>)}</tbody>
-          </table></div>}
+          <div className="card-title">月次売上推移</div>
+          <MiniBarChart data={[...monthly].reverse()} labelKey="month" valueKey="rev" color="#1a3d16"/>
+          <div style={{marginTop:12}}>
+            <div style={{fontSize:12,color:'var(--muted)',marginBottom:6,fontWeight:600}}>月次粗利推移</div>
+            <MiniBarChart data={[...monthly].reverse()} labelKey="month" valueKey="gp" color="#C8A84B"/>
+          </div>
         </div>
       )}
 
+      {/* 月次詳細レポート */}
       <div className="card">
-        <div className="card-title">商品別実績 (30日)</div>
-        {prods.length===0?<div className="empty">データがありません</div>:
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div className="card-title" style={{marginBottom:0,borderBottom:'none',paddingBottom:0}}>月次詳細レポート</div>
+          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <select value={currentMonth} onChange={e=>setSelMonth(e.target.value)} style={{width:'auto',fontSize:13}}>
+              {months.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
+            <button className="btn btn-sm" onClick={printReport}>🖨 印刷/PDF</button>
+            <button className="btn btn-sm btn-primary" onClick={exportToSheet} disabled={exporting}>
+              {exporting?'出力中...':'📊 シートに出力'}
+            </button>
+          </div>
+        </div>
+
+        {/* 月次サマリー */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:8,marginBottom:14}}>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>売上合計</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a3d16'}}>{THB(monthRev)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>粗利合計</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a5c14'}}>{THB(monthGP)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #C8A84B',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>A グループ</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#185FA5'}}>{THB(monthARev)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #C8A84B',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>K グループ</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#8B2E8B'}}>{THB(monthKRev)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>粗利率</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a3d16'}}>{PCT(monthRate)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>取引件数</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a3d16'}}>{monthLogs.length}件</div>
+          </div>
+        </div>
+
+        {/* 商品別グラフ */}
+        {prodStats.length > 0 && (
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600}}>商品別売上（{currentMonth}）</div>
+            <MiniBarChart data={prodStats} labelKey="name" valueKey="rev" color="#1a3d16" maxItems={10}/>
+          </div>
+        )}
+
+        {/* 商品別テーブル */}
+        {prodStats.length===0?<div className="empty">{currentMonth}のデータがありません</div>:
+        <div style={{overflowX:'auto'}}><table>
+          <thead><tr><th>商品名</th><th>G</th><th>販売数</th><th>売上</th><th>粗利</th><th>粗利率</th></tr></thead>
+          <tbody>{prodStats.map(p=><tr key={p.id}>
+            <td>{p.name}</td><td><GBadge g={p.group}/></td><td>{p.soldQty}</td>
+            <td>{THB(p.rev)}</td>
+            <td className={p.gp>=0?'positive':'negative'}>{THB(p.gp)}</td>
+            <td>{PCT(p.rate)}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      </div>
+
+      {/* 全期間商品別 */}
+      <div className="card">
+        <div className="card-title">商品別累計実績（全期間）</div>
+        {allProdStats.filter(p=>p.rev>0).length===0?<div className="empty">データがありません</div>:
         <div style={{overflowX:'auto'}}><table>
           <thead><tr><th>商品名</th><th>G</th><th>販売数</th><th>売上合計</th><th>粗利合計</th><th>粗利率</th></tr></thead>
-          <tbody>{prods.map(p=><tr key={p.id}><td>{p.name}</td><td><GBadge g={p.group}/></td><td>{p.soldQty}</td><td>{THB(p.rev)}</td><td className={p.gp>=0?'positive':'negative'}>{THB(p.gp)}</td><td>{PCT(p.rate)}</td></tr>)}</tbody>
+          <tbody>{allProdStats.filter(p=>p.rev>0).map(p=><tr key={p.id}>
+            <td>{p.name}</td><td><GBadge g={p.group}/></td><td>{p.soldQty}</td>
+            <td>{THB(p.rev)}</td>
+            <td className={p.gp>=0?'positive':'negative'}>{THB(p.gp)}</td>
+            <td>{PCT(p.rate)}</td>
+          </tr>)}</tbody>
         </table></div>}
       </div>
     </div>
