@@ -348,13 +348,13 @@ function Dashboard({data}) {
 }
 
 function Products({data,gasUrl,reload,showToast,categories}) {
-  const init = {name:'',cost:'',price:'',stock:'',minStock:'10',group:'A'};
+  const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A'};
   const [form,setForm] = useState(init);
   const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
 
   const add = async()=>{
     if(!form.name||!form.price) return showToast('商品名と販売価格は必須です');
-    await apiPost(gasUrl,{action:'addProduct',...form,cost:parseFloat(form.cost)||0,price:parseFloat(form.price),stock:parseInt(form.stock)||0,minStock:parseInt(form.minStock)||10});
+    await apiPost(gasUrl,{action:'addProduct',...form,cost:parseFloat(form.cost)||0,price:parseFloat(form.price),stock:parseInt(form.stock)||0,minStock:parseInt(form.minStock)||0});
     setForm(init);
     showToast(`「${form.name}」(${form.group}グループ)を追加しました`);
     setTimeout(reload,1000);
@@ -390,7 +390,7 @@ function Products({data,gasUrl,reload,showToast,categories}) {
             </select>
           </div>
           <div className="form-group" style={{gridColumn:'span 2'}}><label>メモ欄（自由記入）</label><input placeholder="仕入れ先・備考など" value={form.memo||''} onChange={f('memo')}/></div>
-          <div className="form-group"><label>最低在庫アラート</label><input type="number" placeholder="10" value={form.minStock} onChange={f('minStock')}/></div>
+          <div className="form-group"><label>最低在庫アラート</label><input type="number" placeholder="0" value={form.minStock} onChange={f('minStock')}/></div>
         </div>
         <div className="actions"><button className="btn btn-primary" onClick={add}>追加する</button></div>
       </div>
