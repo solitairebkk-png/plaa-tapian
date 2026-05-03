@@ -348,18 +348,16 @@ function Dashboard({data}) {
 }
 
 function Products({data,gasUrl,reload,showToast,categories}) {
-  const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A',categoryCode:'',memo:''};
+  const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A',categoryCode:'',categoryName:'',memo:''};
   const [form,setForm] = useState(init);
   const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
 
   const add = async()=>{
     if(!form.name||!form.price) return showToast('商品名と販売価格は必須です');
     if(!form.categoryCode) return showToast('カテゴリを選択してください');
-    const cat = (categories||[]).find(c=>c.code===form.categoryCode);
-    const catName = cat ? cat.name : form.categoryCode;
     await apiPost(gasUrl,{action:'addProduct',...form,
       categoryCode: form.categoryCode,
-      categoryName: catName,
+      categoryName: form.categoryName || form.categoryCode,
       cost:parseFloat(form.cost)||0,
       price:parseFloat(form.price),
       stock:parseInt(form.stock)||0,
@@ -385,7 +383,11 @@ function Products({data,gasUrl,reload,showToast,categories}) {
           <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名</label><input placeholder="例: マンゴー" value={form.name} onChange={f('name')}/></div>
           <div className="form-group">
             <label>カテゴリ</label>
-            <select value={form.categoryCode} onChange={f('categoryCode')}>
+            <select value={form.categoryCode} onChange={e=>{
+              const code = e.target.value;
+              const cat = (categories||[]).find(c=>c.code===code);
+              setForm(p=>({...p, categoryCode:code, categoryName: cat ? cat.name : code}));
+            }}>
               <option value="">選択してください</option>
               {(categories||[]).map(c=><option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
             </select>
