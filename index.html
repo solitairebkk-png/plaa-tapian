@@ -348,13 +348,24 @@ function Dashboard({data}) {
 }
 
 function Products({data,gasUrl,reload,showToast,categories}) {
-  const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A'};
+  const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A',categoryCode:'',memo:''};
   const [form,setForm] = useState(init);
   const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
 
   const add = async()=>{
     if(!form.name||!form.price) return showToast('商品名と販売価格は必須です');
-    await apiPost(gasUrl,{action:'addProduct',...form,cost:parseFloat(form.cost)||0,price:parseFloat(form.price),stock:parseInt(form.stock)||0,minStock:parseInt(form.minStock)||0});
+    if(!form.categoryCode) return showToast('カテゴリを選択してください');
+    const cat = (categories||[]).find(c=>c.code===form.categoryCode);
+    const catName = cat ? cat.name : form.categoryCode;
+    await apiPost(gasUrl,{action:'addProduct',...form,
+      categoryCode: form.categoryCode,
+      categoryName: catName,
+      cost:parseFloat(form.cost)||0,
+      price:parseFloat(form.price),
+      stock:parseInt(form.stock)||0,
+      minStock:parseInt(form.minStock)||0,
+      memo:form.memo||''
+    });
     setForm(init);
     showToast(`「${form.name}」(${form.group}グループ)を追加しました`);
     setTimeout(reload,1000);
