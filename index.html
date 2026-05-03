@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Plaa Tapian — 在庫管理</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #fdfaf0; --card: #fffef0; --border: #c8d8c4;
+    --text: #1a1a18; --muted: #5a7a56; --hint: #8a9a86;
+    --teal: #1a3d16; --teal-bg: #d4edda; --teal-text: #0d2a0a;
+    --red: #8B0000; --red-bg: #f8d7da; --red-text: #721c24;
+    --amber: #856404; --amber-bg: #fff3cd; --amber-text: #856404;
+    --green: #1a5c14; --green-bg: #d4edda; --green-text: #1a3d16;
+    --blue: #1a3d16; --blue-bg: #d4edda; --blue-text: #0d2a0a;
+    --gold: #C8A84B; --dark-green: #1a3d16;
+    --radius: 10px; --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    --card-border: 3px solid #1a3d16;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif; min-height: 100vh; position: relative; }
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Cg fill='none' stroke='%23B8860B' stroke-width='0.9' opacity='0.18'%3E%3Ccircle cx='35' cy='35' r='5'/%3E%3Ccircle cx='35' cy='35' r='9'/%3E%3Cpath d='M35 16 C31 24 31 28 35 30 C39 28 39 24 35 16Z'/%3E%3Cpath d='M35 54 C31 46 31 42 35 40 C39 42 39 46 35 54Z'/%3E%3Cpath d='M16 35 C24 31 28 31 30 35 C28 39 24 39 16 35Z'/%3E%3Cpath d='M54 35 C46 31 42 31 40 35 C42 39 46 39 54 35Z'/%3E%3Cline x1='35' y1='0' x2='35' y2='14'/%3E%3Cline x1='35' y1='56' x2='35' y2='70'/%3E%3Cline x1='0' y1='35' x2='14' y2='35'/%3E%3Cline x1='56' y1='35' x2='70' y2='35'/%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+  #root { position: relative; z-index: 1; }
+  #root { max-width: 960px; margin: 0 auto; padding: 16px; }
+  .site-header { background: #1a0808; border-radius: 14px; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; position: relative; overflow: hidden; }
+  .site-header-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .site-header-left { display: flex; align-items: center; gap: 18px; position: relative; z-index: 1; }
+  .site-header-text { display: flex; flex-direction: column; gap: 3px; }
+  .site-header-name { font-family: Georgia, serif; font-size: 24px; font-weight: 700; color: #f5f0e8; letter-spacing: 1px; line-height: 1; }
+  .site-header-name span { color: #cc2222; margin: 0 4px; font-weight: 400; }
+  .site-header-sub { font-size: 11px; color: rgba(245,240,232,0.5); letter-spacing: 2.5px; }
+  .site-header-right { position: relative; z-index: 1; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .site-header-sys { font-size: 10px; color: rgba(245,240,232,0.35); letter-spacing: 2px; text-transform: uppercase; }
+  .site-header-date { font-size: 12px; color: rgba(245,240,232,0.55); }
+  .header-btn { padding: 6px 14px; border: 1px solid rgba(245,240,232,0.2); border-radius: 6px; background: transparent; color: rgba(245,240,232,0.7); font-size: 12px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .header-btn:hover { background: rgba(245,240,232,0.1); }
+  @keyframes sway { 0%,100%{transform:rotate(-2deg)} 50%{transform:rotate(2deg)} }
+  .charm-svg { animation: sway 4s ease-in-out infinite; transform-origin: 82px 6px; }
+  .tabs { display: flex; gap: 2px; background: #f5f0dc; border: 2px solid #C8A84B; border-radius: var(--radius); padding: 4px; margin-bottom: 20px; overflow-x: auto; }
+  .tab { flex: 1; min-width: 70px; padding: 8px 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--muted); border-radius: var(--radius-sm); transition: all 0.15s; white-space: nowrap; }
+  .tab.active { background: #1a3d16; color: #fff; }
+  .tab:hover:not(.active) { background: var(--bg); color: var(--text); }
+  .group-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .group-tab { padding: 6px 16px; border: 1px solid var(--border); border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--card); color: var(--muted); transition: all 0.15s; }
+  .g-all { background: var(--teal); color: #fff; border-color: var(--teal); }
+  .g-a   { background: #185FA5; color: #fff; border-color: #185FA5; }
+  .g-k   { background: #8B2E8B; color: #fff; border-color: #8B2E8B; }
+  .card { background: var(--card); border: var(--card-border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: #1a3d16; border-bottom: 1px solid #c8d8c4; padding-bottom: 8px; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .metric { background: var(--card); border: var(--card-border); border-radius: var(--radius); padding: 14px; }
+  .metric-label { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .metric-value { font-size: 20px; font-weight: 700; }
+  .metric-sub { font-size: 11px; color: var(--hint); margin-top: 3px; }
+  .positive { color: var(--green); } .negative { color: var(--red); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-ok     { background: var(--green-bg); color: var(--green-text); }
+  .badge-warn   { background: var(--amber-bg); color: var(--amber-text); }
+  .badge-danger { background: var(--red-bg);   color: var(--red-text); }
+  .badge-a      { background: #E6F1FB; color: #0C447C; }
+  .badge-k      { background: #F3E6F3; color: #6B1A6B; }
+  .alert { border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 10px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .alert-warn   { background: var(--amber-bg); color: var(--amber-text); border: 1px solid var(--amber); }
+  .alert-danger { background: var(--red-bg);   color: var(--red-text);   border: 1px solid var(--red); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-warn { background: var(--amber); } .dot-danger { background: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; text-transform: uppercase; }
+  td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  input, select { width: 100%; padding: 8px 10px; font-size: 13px; border: 2px solid #c8d8c4; border-radius: var(--radius-sm); background: #fff; color: var(--text); transition: border-color 0.15s; font-family: inherit; }
+  input:focus, select:focus { outline: none; border-color: #1a3d16; }
+  .btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .btn:hover { background: var(--bg); } .btn:active { transform: scale(0.97); }
+  .btn-primary { background: #1a3d16; color: #fff; border-color: #1a3d16; }
+  .btn-primary:hover { background: #0d2a0a; }
+  .btn-danger { color: var(--red); border-color: var(--red-bg); background: var(--red-bg); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .qty-cell input { width: 70px; text-align: center; padding: 5px 8px; }
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--hint); font-size: 13px; }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: var(--card); padding: 12px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: fadeIn 0.2s ease; max-width: 320px; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .loading { text-align: center; padding: 2rem; color: var(--muted); font-size: 13px; }
+  .lock-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .lock-card { background: var(--card); border: var(--card-border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 360px; text-align: center; }
+  .lock-card h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; font-family: Georgia, serif; }
+  .lock-card p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .lock-card input { margin-bottom: 10px; font-size: 15px; text-align: center; letter-spacing: 2px; }
+  .lock-err { font-size: 12px; color: var(--red); margin-bottom: 8px; }
+  .setup-wrap { text-align: center; padding: 3rem 1rem; }
+  .setup-row { display: flex; gap: 8px; max-width: 560px; margin: 0 auto; }
+  .setup-row input { flex: 1; }
+  .step-list { text-align: left; max-width: 500px; margin: 20px auto 0; }
+  .step { display: flex; gap: 10px; margin-bottom: 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .step-n { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  @media (max-width: 600px) {
+    #root { padding: 10px; }
+    .metric-value { font-size: 17px; }
+    .tab { font-size: 11px; padding: 7px 3px; }
+    .site-header { padding: 14px 16px; }
+    .charm-svg { width: 70px; height: 58px; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+const CONFIG_KEY  = 'inv_gas_url';
+const PASS_KEY    = 'inv_auth';
+const APP_PASS    = 'kanobkk';
+const DEFAULT_GAS = 'https://script.google.com/macros/s/AKfycbxRsKhWKYjx-jNdU6YZxsP9fCBYItnQsbfcZHHkIcdvZANl8_qshMrOhSaNu8n7SS0RXA/exec';
+const THB = v => '฿' + Number(v).toLocaleString('th-TH', {minimumFractionDigits:0,maximumFractionDigits:0});
+const PCT = v => (Number(v)*100).toFixed(1)+'%';
+const todayStr = () => new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'/');
+
+async function api(gasUrl, params) {
+  const res = await fetch(`${gasUrl}?${new URLSearchParams(params)}`);
+  return res.json();
+}
+async function apiPost(gasUrl, body) {
+  await fetch(gasUrl, {method:'POST', body:JSON.stringify(body), headers:{'Content-Type':'application/json'}, mode:'no-cors'});
+  return {ok:true};
+}
+
+function CharmSVG({size=1}) {
+  return (
+    <svg className="charm-svg" width={106*size} height={84*size} viewBox="0 0 106 84">
+      <line x1="82" y1="0" x2="82" y2="10" stroke="#cc2222" strokeWidth="2" strokeLinecap="round"/>
+      <circle cx="82" cy="11" r="3" fill="#cc2222"/>
+      <polygon points="64,10 76,22 64,34 52,22" fill="white" stroke="#cc2222" strokeWidth="1.5"/>
+      <polygon points="82,10 94,22 82,34 70,22" fill="#cc2222" stroke="#cc2222" strokeWidth="1"/>
+      <polygon points="46,28 58,40 46,52 34,40" fill="#cc2222" stroke="#cc2222" strokeWidth="1"/>
+      <polygon points="64,28 76,40 64,52 52,40" fill="white" stroke="#cc2222" strokeWidth="1.5"/>
+      <polygon points="82,28 94,40 82,52 70,40" fill="white" stroke="#cc2222" strokeWidth="1.5"/>
+      <polygon points="64,46 76,58 64,70 52,58" fill="#cc2222" stroke="#cc2222" strokeWidth="1"/>
+      <polygon points="82,46 94,58 82,70 70,58" fill="white" stroke="#cc2222" strokeWidth="1.5"/>
+      <polygon points="94,28 110,42 94,56 78,42" fill="#cc2222" stroke="#cc2222" strokeWidth="1"/>
+      <circle cx="100" cy="37" r="4" fill="white"/>
+      <circle cx="101" cy="37" r="2.4" fill="#1a0000"/>
+      <circle cx="102" cy="36" r="0.9" fill="white"/>
+      <path d="M107,42 Q110,43 107,44" fill="none" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+      <polygon points="34,34 46,42 34,50 22,42" fill="white" stroke="#cc2222" strokeWidth="1.5"/>
+      <polygon points="73,4 82,12 73,20 64,12" fill="#cc2222" stroke="#cc2222" strokeWidth="1" opacity="0.85"/>
+      <polygon points="73,64 82,72 73,80 64,72" fill="#cc2222" stroke="#cc2222" strokeWidth="1" opacity="0.85"/>
+    </svg>
+  );
+}
+
+function LockScreen({onAuth}) {
+  const [pass,setPass] = useState('');
+  const [err,setErr]   = useState('');
+  const check = () => { if(pass===APP_PASS){onAuth();}else{setErr('パスワードが違います');setPass('');} };
+  return (
+    <div className="lock-screen">
+      <div className="lock-card">
+        <div style={{display:'flex',justifyContent:'center',marginBottom:16}}><CharmSVG size={0.8}/></div>
+        <h2>Plaa · Tapian</h2>
+        <p>パスワードを入力してください</p>
+        {err && <div className="lock-err">{err}</div>}
+        <input type="password" placeholder="••••••••" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==='Enter'&&check()} autoFocus/>
+        <button className="btn btn-primary" style={{width:'100%'}} onClick={check}>ログイン</button>
+      </div>
+    </div>
+  );
+}
+
+function SetupScreen({onSave}) {
+  const [url,setUrl] = useState('');
+  return (
+    <div className="setup-wrap">
+      <h2>GAS URLを設定してください</h2>
+      <p style={{fontSize:13,color:'var(--muted)',marginBottom:20}}>Google Apps ScriptのデプロイURLを入力してください。</p>
+      <div className="setup-row">
+        <input placeholder="https://script.google.com/macros/s/..." value={url} onChange={e=>setUrl(e.target.value)}/>
+        <button className="btn btn-primary" onClick={()=>url&&onSave(url)}>保存</button>
+      </div>
+    </div>
+  );
+}
+
+function Alerts({dashboard}) {
+  const d = dashboard||{};
+  return <div>
+    {(d.outStock||[]).length>0 && <div className="alert alert-danger"><div className="dot dot-danger"/>在庫切れ: {d.outStock.join(', ')}</div>}
+    {(d.lowStock||[]).length>0 && <div className="alert alert-warn"><div className="dot dot-warn"/>在庫少: {d.lowStock.join(', ')}</div>}
+  </div>;
+}
+
+function GBadge({g}) {
+  return <span className={`badge badge-${(g||'A').toLowerCase()}`}>{g||'A'}</span>;
+}
+
+function GroupTabs({value, onChange, labels}) {
+  const opts = labels || [['all','全商品'],['A','A グループ'],['K','K グループ']];
+  const cls  = {all:'g-all',A:'g-a',K:'g-k'};
+  return (
+    <div className="group-tabs">
+      {opts.map(([k,v])=>
+        <button key={k} className={`group-tab${value===k?' '+cls[k]:''}`} onClick={()=>onChange(k)}>{v}</button>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [authed,setAuthed]       = useState(()=>sessionStorage.getItem(PASS_KEY)==='ok');
+  const [gasUrl,setGasUrlState]  = useState(()=>localStorage.getItem(CONFIG_KEY)||DEFAULT_GAS);
+  const [tab,setTab]             = useState('dashboard');
+  const [data,setData]           = useState({products:[],sales:[],dashboard:{},memos:[],categories:[]});
+  const [loading,setLoading]     = useState(false);
+  const [toast,setToast]         = useState('');
+  const timer                    = useRef(null);
+
+  const showToast = msg => { setToast(msg); clearTimeout(timer.current); timer.current=setTimeout(()=>setToast(''),3500); };
+  const setGasUrl = url => { setGasUrlState(url); localStorage.setItem(CONFIG_KEY,url); };
+
+  const load = useCallback(async()=>{
+    if(!gasUrl) return;
+    setLoading(true);
+    try {
+      const [p,s,d,m,c] = await Promise.all([
+        api(gasUrl,{action:'getProducts'}),
+        api(gasUrl,{action:'getSales',days:30}),
+        api(gasUrl,{action:'getDashboard'}),
+        api(gasUrl,{action:'getMemos'}),
+        api(gasUrl,{action:'getCategories'}),
+      ]);
+      setData({products:p.products||[],sales:s.sales||[],dashboard:d,memos:m.memos||[],categories:c.categories||[]});
+    } catch(e){showToast('通信エラー: '+e.message);}
+    setLoading(false);
+  },[gasUrl]);
+
+  useEffect(()=>{if(authed&&gasUrl)load();},[authed,gasUrl,load]);
+
+  if(!authed) return <LockScreen onAuth={()=>{sessionStorage.setItem(PASS_KEY,'ok');setAuthed(true);}}/>;
+  if(!gasUrl) return <SetupScreen onSave={url=>{setGasUrl(url);}}/>;
+
+  return (
+    <div>
+      <div className="site-header">
+        <svg className="site-header-bg" viewBox="0 0 680 88" preserveAspectRatio="xMidYMid slice">
+          <path d="M0 30 Q170 18 340 30 Q510 42 680 30" fill="none" stroke="#cc2222" strokeWidth="0.5" opacity="0.2"/>
+          <path d="M0 60 Q170 48 340 60 Q510 72 680 60" fill="none" stroke="#cc2222" strokeWidth="0.5" opacity="0.12"/>
+        </svg>
+        <div className="site-header-left">
+          <CharmSVG/>
+          <div className="site-header-text">
+            <div className="site-header-name">Plaa<span>·</span>Tapian</div>
+            <div className="site-header-sub">ปลาตะเพียน · 在庫管理システム</div>
+          </div>
+        </div>
+        <div className="site-header-right">
+          <div className="site-header-sys">inventory system</div>
+          <div className="site-header-date">{todayStr()} — {data.products.length}商品</div>
+          <button className="header-btn" onClick={load} disabled={loading}>{loading?'更新中...':'↻ 更新'}</button>
+        </div>
+      </div>
+
+      <Alerts dashboard={data.dashboard}/>
+
+      <div className="tabs">
+        {[['dashboard','ダッシュボード'],['products','商品管理'],['sales','売上入力'],['restock','入荷'],['report','レポート'],['memo','仕入メモ'],['settings','設定']].map(([k,v])=>
+          <button key={k} className={`tab${tab===k?' active':''}`} onClick={()=>setTab(k)}>{v}</button>
+        )}
+      </div>
+
+      {loading && tab!=='sales' && <div className="loading">読み込み中...</div>}
+      {!loading&&tab==='dashboard' && <Dashboard data={data}/>}
+      {!loading&&tab==='products'  && <Products  data={data} gasUrl={gasUrl} reload={load} showToast={showToast} categories={data.categories}/>}
+      <div style={{display:tab==='sales'?'block':'none'}}>
+        <Sales data={data} gasUrl={gasUrl} reloadProducts={async()=>{
+          const p = await api(gasUrl,{action:'getProducts'});
+          setData(prev=>({...prev, products:p.products||[]}));
+        }} showToast={showToast}/>
+      </div>
+      {!loading&&tab==='restock'   && <Restock   data={data} gasUrl={gasUrl} reload={load} showToast={showToast}/>}
+      {!loading&&tab==='report'    && <Report    data={data} gasUrl={gasUrl} showToast={showToast}/>}
+      {!loading&&tab==='memo'      && <Memo      data={data} gasUrl={gasUrl} reload={load} showToast={showToast}/>}
+      {tab==='settings' && (
+        <div>
+          <CategoryManager categories={data.categories} gasUrl={gasUrl} reload={load} showToast={showToast}/>
+          <Settings gasUrl={gasUrl} setGasUrl={setGasUrl} reload={load} showToast={showToast}/>
+        </div>
+      )}
+
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+function Dashboard({data}) {
+  const d = data.dashboard||{};
+  const gpRate    = d.todayRev>0?d.todayGP/d.todayRev:0;
+  const totalRate = d.totalRev>0?d.totalGP/d.totalRev:0;
+  return (
+    <div>
+      <div className="metrics">
+        <div className="metric"><div className="metric-label">本日売上</div><div className="metric-value">{THB(d.todayRev||0)}</div><div className="metric-sub">粗利率 {PCT(gpRate)}</div></div>
+        <div className="metric"><div className="metric-label">本日粗利</div><div className={`metric-value ${(d.todayGP||0)>=0?'positive':'negative'}`}>{THB(d.todayGP||0)}</div></div>
+        <div className="metric"><div className="metric-label">累計売上(30日)</div><div className="metric-value">{THB(d.totalRev||0)}</div><div className="metric-sub">粗利率 {PCT(totalRate)}</div></div>
+        <div className="metric"><div className="metric-label">累計粗利(30日)</div><div className={`metric-value ${(d.totalGP||0)>=0?'positive':'negative'}`}>{THB(d.totalGP||0)}</div></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+        <div className="metric" style={{borderLeft:'3px solid #185FA5'}}>
+          <div className="metric-label" style={{color:'#185FA5'}}>A グループ（正規）</div>
+          <div className="metric-value">{THB(d.aTodayRev||0)}</div>
+          <div className="metric-sub">本日粗利 {THB(d.aTodayGP||0)}</div>
+          <div className="metric-sub" style={{marginTop:4}}>30日売上 {THB(d.aRev||0)} / 粗利 {THB(d.aGP||0)}</div>
+        </div>
+        <div className="metric" style={{borderLeft:'3px solid #8B2E8B'}}>
+          <div className="metric-label" style={{color:'#8B2E8B'}}>K グループ（非正規）</div>
+          <div className="metric-value">{THB(d.kTodayRev||0)}</div>
+          <div className="metric-sub">本日粗利 {THB(d.kTodayGP||0)}</div>
+          <div className="metric-sub" style={{marginTop:4}}>30日売上 {THB(d.kRev||0)} / 粗利 {THB(d.kGP||0)}</div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="card-title">在庫状況</div>
+        {data.products.length===0?<div className="empty">商品がありません</div>:
+        <div style={{overflowX:'auto'}}><table>
+          <thead><tr><th>商品名</th><th>G</th><th>在庫</th><th>最低</th><th>販売価格</th><th>状態</th></tr></thead>
+          <tbody>{data.products.map(p=>{
+            const st = p.stock===0?<span className="badge badge-danger">在庫切れ</span>
+              :p.stock<=p.minStock?<span className="badge badge-warn">要補充</span>
+              :<span className="badge badge-ok">正常</span>;
+            return <tr key={p.id}><td>{p.name}</td><td><GBadge g={p.group}/></td><td><strong>{p.stock}</strong></td><td>{p.minStock}</td><td>{THB(p.price)}</td><td>{st}</td></tr>;
+          })}</tbody>
+        </table></div>}
+      </div>
+    </div>
+  );
+}
+
+function Products({data,gasUrl,reload,showToast,categories}) {
+  const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A'};
+  const [form,setForm] = useState(init);
+  const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
+
+  const add = async()=>{
+    if(!form.name||!form.price) return showToast('商品名と販売価格は必須です');
+    await apiPost(gasUrl,{action:'addProduct',...form,cost:parseFloat(form.cost)||0,price:parseFloat(form.price),stock:parseInt(form.stock)||0,minStock:parseInt(form.minStock)||0});
+    setForm(init);
+    showToast(`「${form.name}」(${form.group}グループ)を追加しました`);
+    setTimeout(reload,1000);
+  };
+  const del = async p=>{
+    if(!confirm(`「${p.name}」を削除しますか？`)) return;
+    await apiPost(gasUrl,{action:'deleteProduct',id:p.id});
+    showToast('削除しました');
+    setTimeout(reload,1000);
+  };
+
+  return (
+    <div>
+      <div className="card">
+        <div className="card-title">新商品登録</div>
+        <div className="form-grid">
+          <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名</label><input placeholder="例: マンゴー" value={form.name} onChange={f('name')}/></div>
+          <div className="form-group">
+            <label>カテゴリ</label>
+            <select value={form.categoryCode} onChange={f('categoryCode')}>
+              <option value="">選択してください</option>
+              {(categories||[]).map(c=><option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+            </select>
+          </div>
+          <div className="form-group"><label>販売価格 (THB)</label><input type="number" placeholder="0" value={form.price} onChange={f('price')}/></div>
+          <div className="form-group"><label>仕入単価 (THB)</label><input type="number" placeholder="0" value={form.cost} onChange={f('cost')}/></div>
+          <div className="form-group"><label>初期在庫数</label><input type="number" placeholder="0" value={form.stock} onChange={f('stock')}/></div>
+          <div className="form-group">
+            <label>グループ</label>
+            <select value={form.group} onChange={f('group')}>
+              <option value="A">A グループ（正規仕入れ）</option>
+              <option value="K">K グループ（非正規仕入れ）</option>
+            </select>
+          </div>
+          <div className="form-group" style={{gridColumn:'span 2'}}><label>メモ欄（自由記入）</label><input placeholder="仕入れ先・備考など" value={form.memo||''} onChange={f('memo')}/></div>
+          <div className="form-group"><label>最低在庫アラート</label><input type="number" placeholder="0" value={form.minStock} onChange={f('minStock')}/></div>
+        </div>
+        <div className="actions"><button className="btn btn-primary" onClick={add}>追加する</button></div>
+      </div>
+      {['A','K'].map(g=>(
+        <div className="card" key={g}>
+          <div className="card-title" style={{color:g==='A'?'#185FA5':'#8B2E8B'}}>
+            {g}グループ（{g==='A'?'正規仕入れ':'非正規仕入れ'}） — {data.products.filter(p=>(p.group||'A')===g).length}件
+          </div>
+          {data.products.filter(p=>(p.group||'A')===g).length===0?<div className="empty">商品がありません</div>:
+          <div style={{overflowX:'auto'}}><table>
+            <thead><tr><th>ID</th><th>商品名</th><th>カテゴリ</th><th>仕入単価</th><th>販売価格</th><th>利益率</th><th>在庫</th><th></th></tr></thead>
+            <tbody>{data.products.filter(p=>(p.group||'A')===g).map(p=>{
+              const m = p.price>0?(p.price-p.cost)/p.price:0;
+              return <tr key={p.id}>
+                <td><span style={{fontFamily:'monospace',fontSize:11,color:'var(--muted)'}}>{p.id}</span></td>
+                <td>{p.name}</td>
+                <td><span style={{fontSize:11,color:'var(--muted)'}}>{p.categoryCode||'–'} {p.categoryName?'— '+p.categoryName:''}</span></td>
+                <td>{THB(p.cost)}</td><td>{THB(p.price)}</td>
+                <td className={m>=0?'positive':'negative'}>{PCT(m)}</td>
+                <td>{p.stock}</td>
+                <td><button className="btn btn-sm btn-danger" onClick={()=>del(p)}>削除</button></td>
+              </tr>;
+            })}</tbody>
+          </table></div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Sales({data,gasUrl,reloadProducts,showToast}) {
+  const [selId,    setSelId]    = useState('');
+  const [qty,      setQty]      = useState(1);
+  const [stype,    setStype]    = useState('normal'); // normal / sample / discount
+  const [discType, setDiscType] = useState('amount'); // amount / percent
+  const [discVal,  setDiscVal]  = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [lines,    setLines]    = useState([]);
+
+  const sortedProducts = [...data.products].sort((a,b)=>{
+    const aQty = data.sales.filter(s=>s.name===a.name).reduce((x,s)=>x+s.qty,0);
+    const bQty = data.sales.filter(s=>s.name===b.name).reduce((x,s)=>x+s.qty,0);
+    return bQty - aQty;
+  });
+
+  const selProduct = data.products.find(p=>p.id===selId);
+
+  // 実際の販売価格を計算
+  const calcActualPrice = () => {
+    if (!selProduct) return 0;
+    if (stype !== 'discount') return selProduct.price;
+    const base = selProduct.price;
+    if (discType === 'percent') {
+      const pct = parseFloat(discVal)||0;
+      return Math.round(base * (1 - pct/100));
+    } else {
+      return Math.max(0, base - (parseFloat(discVal)||0));
+    }
+  };
+  const actualPrice = calcActualPrice();
+
+  const addLine = async () => {
+    if (!selId) return showToast('商品を選択してください');
+    if (!qty || qty < 1) return showToast('数量を入力してください');
+    if (selProduct && selProduct.stock < qty) return showToast(`在庫不足（残${selProduct.stock}個）`);
+    if (stype === 'discount' && !discVal) return showToast('割引額または割引率を入力してください');
+    setLoading(true);
+
+    if (stype === 'sample') {
+      await apiPost(gasUrl,{action:'recordSamples',samples:[{id:selId,qty:Number(qty)}]});
+    } else {
+      // 通常販売もディスカウントも売上として記録（価格が違うだけ）
+      await apiPost(gasUrl,{action:'recordSales',sales:[{id:selId,qty:Number(qty),actualPrice}]});
+    }
+
+    const now = new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+    setLines(prev=>[...prev,{
+      id: Date.now(),
+      productId: selId,
+      name: selProduct.name,
+      price: actualPrice,
+      listPrice: selProduct.price,
+      cost: selProduct.cost,
+      group: selProduct.group,
+      qty: Number(qty),
+      stype,
+      discType: stype==='discount'?discType:null,
+      discVal:  stype==='discount'?discVal:null,
+      time: now,
+    }]);
+    setSelId(''); setQty(1); setStype('normal'); setDiscVal('');
+    setLoading(false);
+    showToast(`「${selProduct.name}」${qty}個を記録しました`);
+    reloadProducts();
+  };
+
+  const deleteLine = async (line) => {
+    if (!confirm(`「${line.name}」×${line.qty}個の記録を削除しますか？\n在庫が${line.qty}個戻ります。`)) return;
+    await apiPost(gasUrl,{action: line.stype==='sample' ? 'revertSample' : 'revertSale', id: line.productId, qty: line.qty});
+    setLines(prev=>prev.filter(l=>l.id!==line.id));
+    showToast('削除しました（在庫を戻しました）');
+    reloadProducts();
+  };
+
+  const todayRev = lines.filter(l=>l.stype!=='sample').reduce((a,l)=>a+l.price*l.qty,0);
+  const todayGP  = lines.filter(l=>l.stype!=='sample').reduce((a,l)=>a+(l.price-l.cost)*l.qty,0);
+  const todaySmp = lines.filter(l=>l.stype==='sample').reduce((a,l)=>a+l.qty,0);
+  const todayDisc= lines.filter(l=>l.stype==='discount').reduce((a,l)=>a+(l.listPrice-l.price)*l.qty,0);
+
+  return (
+    <div>
+      <div className="card">
+        <div className="card-title">売上入力 — {todayStr()}</div>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:10}}>
+          <div className="form-group" style={{flex:'2 1 200px',margin:0}}>
+            <label>商品選択</label>
+            <select value={selId} onChange={e=>setSelId(e.target.value)}>
+              <option value="">-- 商品を選択 --</option>
+              {sortedProducts.map(p=>(
+                <option key={p.id} value={p.id} disabled={p.stock===0}>
+                  {p.stock===0?'[在庫切れ] ':''}{p.name}（在庫:{p.stock}）— {THB(p.price)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{flex:'0 0 80px',margin:0}}>
+            <label>数量</label>
+            <input type="number" min="1" value={qty} onChange={e=>setQty(parseInt(e.target.value)||1)} style={{textAlign:'center'}}/>
+          </div>
+          <button className="btn btn-primary" onClick={addLine} disabled={loading} style={{whiteSpace:'nowrap',alignSelf:'flex-end'}}>
+            {loading?'処理中...':'＋ 追加'}
+          </button>
+        </div>
+
+        {/* 種別選択 */}
+        <div style={{display:'flex',gap:16,marginBottom:10,flexWrap:'wrap'}}>
+          {[['normal','通常販売','var(--teal)'],['discount','ディスカウント','#B8860B'],['sample','サンプル','#8B2E8B']].map(([v,label,color])=>(
+            <label key={v} style={{display:'flex',alignItems:'center',gap:5,fontSize:13,cursor:'pointer',color:stype===v?color:'var(--muted)',fontWeight:stype===v?600:400}}>
+              <input type="radio" name="stype" checked={stype===v} onChange={()=>setStype(v)}/> {label}
+            </label>
+          ))}
+        </div>
+
+        {/* ディスカウント入力欄 */}
+        {stype==='discount' && selProduct && (
+          <div style={{background:'#FFFBEA',border:'1px solid #F0D060',borderRadius:8,padding:'10px 14px',marginBottom:10}}>
+            <div style={{fontSize:12,color:'#8a6a1a',marginBottom:8,fontWeight:600}}>ディスカウント設定 — 定価 {THB(selProduct.price)}</div>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+              <select value={discType} onChange={e=>setDiscType(e.target.value)} style={{width:120,fontSize:13}}>
+                <option value="amount">金額で指定</option>
+                <option value="percent">割引率(%)で指定</option>
+              </select>
+              <input type="number" min="0" value={discVal} onChange={e=>setDiscVal(e.target.value)}
+                placeholder={discType==='percent'?'例: 20':'例: 50'}
+                style={{width:120,fontSize:13}}/>
+              <span style={{fontSize:12,color:'#8a6a1a'}}>
+                {discType==='percent' && discVal ? `${discVal}% OFF` : ''}
+              </span>
+              {discVal && (
+                <div style={{fontSize:13,fontWeight:600,color:'#B8860B'}}>
+                  実際の販売価格: {THB(actualPrice)}
+                  <span style={{fontSize:11,color:'var(--muted)',marginLeft:8}}>
+                    (割引額: {THB(selProduct.price - actualPrice)})
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {selProduct && (
+          <div style={{fontSize:12,color:'var(--muted)',marginBottom:4,padding:'6px 10px',background:'var(--bg)',borderRadius:6}}>
+            {selProduct.name} — 定価 {THB(selProduct.price)} / 仕入 {THB(selProduct.cost)} / 利益率 {selProduct.price>0?((selProduct.price-selProduct.cost)/selProduct.price*100).toFixed(1):'0'}%
+            {stype==='discount' && discVal && <span style={{color:'#B8860B',marginLeft:8,fontWeight:600}}>→ 販売価格 {THB(actualPrice)} / 粗利 {THB(actualPrice-selProduct.cost)}</span>}
+          </div>
+        )}
+      </div>
+
+      {/* 本日の入力済み明細 */}
+      {lines.length > 0 && (
+        <div className="card">
+          <div className="card-title">本日の入力済み明細</div>
+          <div style={{overflowX:'auto'}}><table>
+            <thead><tr><th>時刻</th><th>商品名</th><th>G</th><th>種別</th><th>数量</th><th>販売価格</th><th>小計</th><th></th></tr></thead>
+            <tbody>
+              {lines.map(l=>(
+                <tr key={l.id}>
+                  <td style={{fontSize:11,color:'var(--hint)'}}>{l.time}</td>
+                  <td>{l.name}</td>
+                  <td><GBadge g={l.group}/></td>
+                  <td>{
+                    l.stype==='sample'   ? <span className="badge" style={{background:'#F0E6F6',color:'#8B2E8B'}}>サンプル</span> :
+                    l.stype==='discount' ? <span className="badge" style={{background:'#FFFBEA',color:'#B8860B'}}>割引{l.discType==='percent'?` ${l.discVal}%OFF`:''}</span> :
+                    <span className="badge badge-ok">通常</span>
+                  }</td>
+                  <td style={{textAlign:'center'}}>{l.qty}</td>
+                  <td style={{fontSize:12}}>
+                    {l.stype==='sample' ? '—' : THB(l.price)}
+                    {l.stype==='discount' && <div style={{fontSize:10,color:'var(--hint)',textDecoration:'line-through'}}>{THB(l.listPrice)}</div>}
+                  </td>
+                  <td>{l.stype==='sample' ? <span style={{color:'var(--muted)',fontSize:12}}>—</span> : THB(l.price*l.qty)}</td>
+                  <td><button className="btn btn-sm btn-danger" onClick={()=>deleteLine(l)}>削除</button></td>
+                </tr>
+              ))}
+              <tr style={{background:'var(--bg)'}}>
+                <td colSpan="5" style={{textAlign:'right',fontWeight:600}}>本日売上合計</td>
+                <td style={{fontWeight:700}}>{THB(todayRev)}</td><td></td>
+              </tr>
+              <tr style={{background:'var(--bg)'}}>
+                <td colSpan="5" style={{textAlign:'right',fontSize:12,color:'var(--muted)'}}>本日粗利</td>
+                <td className={todayGP>=0?'positive':'negative'} style={{fontWeight:600}}>{THB(todayGP)}</td><td></td>
+              </tr>
+              {todaySmp > 0 && (
+                <tr style={{background:'var(--bg)'}}>
+                  <td colSpan="6" style={{textAlign:'right',fontSize:12,color:'#8B2E8B'}}>サンプル合計</td>
+                  <td style={{fontSize:12,color:'#8B2E8B'}}>{todaySmp}個</td><td></td>
+                </tr>
+              )}
+              {todayDisc > 0 && (
+                <tr style={{background:'var(--bg)'}}>
+                  <td colSpan="6" style={{textAlign:'right',fontSize:12,color:'#B8860B'}}>割引合計</td>
+                  <td style={{fontSize:12,color:'#B8860B'}}>▲{THB(todayDisc)}</td><td></td>
+                </tr>
+              )}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+      {lines.length === 0 && (
+        <div style={{textAlign:'center',padding:'2rem',color:'var(--hint)',fontSize:13}}>
+          上のフォームから商品を追加してください
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Restock({data,gasUrl,reload,showToast}) {
+  const [form,setForm] = useState({id:'',qty:'',cost:''});
+  const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
+  const submit = async()=>{
+    if(!form.id||!form.qty) return showToast('商品と入荷数を入力してください');
+    await apiPost(gasUrl,{action:'recordRestock',id:form.id,qty:parseInt(form.qty),cost:form.cost?parseFloat(form.cost):null});
+    const p=data.products.find(x=>x.id===form.id);
+    showToast(`「${p?.name}」${form.qty}個を入荷しました`);
+    setForm({id:'',qty:'',cost:''});
+    setTimeout(reload,1200);
+  };
+  const need = data.products.filter(p=>p.stock<=p.minStock);
+  return (
+    <div>
+      <div className="card">
+        <div className="card-title">入荷登録</div>
+        <div className="form-grid">
+          <div className="form-group" style={{gridColumn:'span 2'}}>
+            <label>商品</label>
+            <select value={form.id} onChange={f('id')}>
+              <option value="">選択してください</option>
+              {['A','K'].map(g=>(
+                <optgroup key={g} label={`${g}グループ（${g==='A'?'正規':'非正規'}）`}>
+                  {data.products.filter(p=>(p.group||'A')===g).map(p=><option key={p.id} value={p.id}>{p.name}（在庫: {p.stock}）</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div className="form-group"><label>入荷数</label><input type="number" placeholder="0" value={form.qty} onChange={f('qty')}/></div>
+          <div className="form-group"><label>仕入単価（変更時のみ）</label><input type="number" placeholder="空欄=変更なし" value={form.cost} onChange={f('cost')}/></div>
+        </div>
+        <div className="actions"><button className="btn btn-primary" onClick={submit}>入荷を登録</button></div>
+      </div>
+      <div className="card">
+        <div className="card-title">要補充リスト ({need.length}件)</div>
+        {need.length===0?<div className="empty">補充が必要な商品はありません</div>:
+        <div style={{overflowX:'auto'}}><table>
+          <thead><tr><th>商品名</th><th>G</th><th>現在庫</th><th>最低</th><th>状態</th></tr></thead>
+          <tbody>{need.map(p=><tr key={p.id}><td>{p.name}</td><td><GBadge g={p.group}/></td><td>{p.stock}</td><td>{p.minStock}</td><td>{p.stock===0?<span className="badge badge-danger">在庫切れ</span>:<span className="badge badge-warn">要補充</span>}</td></tr>)}</tbody>
+        </table></div>}
+      </div>
+    </div>
+  );
+}
+
+function MiniBarChart({data, labelKey, valueKey, color='#1a3d16', maxItems=10}) {
+  const items = data.slice(0,maxItems);
+  const maxVal = Math.max(...items.map(d=>d[valueKey]),1);
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+      {items.map((d,i)=>(
+        <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+          <div style={{width:120,fontSize:11,color:'#333',textAlign:'right',flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d[labelKey]}</div>
+          <div style={{flex:1,background:'#f0ede0',borderRadius:4,height:20,position:'relative'}}>
+            <div style={{width:`${(d[valueKey]/maxVal)*100}%`,background:color,borderRadius:4,height:'100%',minWidth:2,transition:'width 0.4s'}}/>
+          </div>
+          <div style={{width:80,fontSize:11,fontWeight:600,color,flexShrink:0}}>{THB(d[valueKey])}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Report({data, gasUrl, showToast}) {
+  const [gf,setGf]           = useState('all');
+  const [selMonth,setSelMonth]= useState('');
+  const [exporting,setExporting]= useState(false);
+
+  const fs = gf==='all'?data.sales:data.sales.filter(s=>s.group===gf);
+  const totalRev  = fs.reduce((a,s)=>a+s.price*s.qty,0);
+  const totalGP   = fs.reduce((a,s)=>a+Number(s.gp),0);
+  const totalRate = totalRev>0?totalGP/totalRev:0;
+
+  // 月次データ
+  const months = [...new Set(fs.map(s=>s.date?.slice(0,7)))].filter(Boolean).sort().reverse();
+  const monthly = months.map(m=>{
+    const logs=fs.filter(s=>s.date?.startsWith(m));
+    const aLogs=logs.filter(s=>(s.group||'A')==='A');
+    const kLogs=logs.filter(s=>(s.group||'A')==='K');
+    const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
+    const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
+    const aRev=aLogs.reduce((a,s)=>a+s.price*s.qty,0);
+    const kRev=kLogs.reduce((a,s)=>a+s.price*s.qty,0);
+    return {month:m,rev,gp,rate:rev>0?gp/rev:0,aRev,kRev,count:logs.length};
+  });
+
+  // 選択月（デフォルト最新月）
+  const currentMonth = selMonth || months[0] || '';
+  const monthLogs = fs.filter(s=>s.date?.startsWith(currentMonth));
+  const monthRev  = monthLogs.reduce((a,s)=>a+s.price*s.qty,0);
+  const monthGP   = monthLogs.reduce((a,s)=>a+Number(s.gp),0);
+  const monthRate = monthRev>0?monthGP/monthRev:0;
+  const monthALogs= monthLogs.filter(s=>(s.group||'A')==='A');
+  const monthKLogs= monthLogs.filter(s=>(s.group||'A')==='K');
+  const monthARev = monthALogs.reduce((a,s)=>a+s.price*s.qty,0);
+  const monthKRev = monthKLogs.reduce((a,s)=>a+s.price*s.qty,0);
+
+  // 商品別（選択月）
+  const prodStats = data.products.map(p=>{
+    const logs=monthLogs.filter(s=>s.name===p.name);
+    const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
+    const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
+    return {...p,soldQty:logs.reduce((a,s)=>a+s.qty,0),rev,gp,rate:rev>0?gp/rev:0};
+  }).filter(p=>p.rev>0).sort((a,b)=>b.rev-a.rev);
+
+  // 全期間商品別
+  const allProdStats = data.products.map(p=>{
+    const logs=fs.filter(s=>s.name===p.name);
+    const rev=logs.reduce((a,s)=>a+s.price*s.qty,0);
+    const gp=logs.reduce((a,s)=>a+Number(s.gp),0);
+    return {...p,soldQty:logs.reduce((a,s)=>a+s.qty,0),rev,gp,rate:rev>0?gp/rev:0};
+  }).sort((a,b)=>b.rev-a.rev);
+
+  // PDF印刷
+  const printReport = () => {
+    const win = window.open('','_blank');
+    const rows = prodStats.map(p=>`
+      <tr>
+        <td>${p.name}</td><td>${p.group}</td><td>${p.soldQty}</td>
+        <td>฿${p.rev.toLocaleString()}</td>
+        <td>฿${p.gp.toLocaleString()}</td>
+        <td>${(p.rate*100).toFixed(1)}%</td>
+      </tr>`).join('');
+    win.document.write(`
+      <html><head><title>月次レポート ${currentMonth}</title>
+      <style>
+        body{font-family:'Hiragino Sans',sans-serif;padding:24px;color:#1a1a18;}
+        h1{font-size:20px;color:#1a3d16;border-bottom:2px solid #C8A84B;padding-bottom:8px;}
+        h2{font-size:14px;color:#1a3d16;margin:16px 0 8px;}
+        .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0;}
+        .metric{border:2px solid #1a3d16;border-radius:8px;padding:10px;text-align:center;}
+        .metric-label{font-size:11px;color:#5a7a56;}
+        .metric-value{font-size:18px;font-weight:700;color:#1a3d16;}
+        .group-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;}
+        .group-box{border:2px solid #1a3d16;border-radius:8px;padding:10px;}
+        table{width:100%;border-collapse:collapse;font-size:12px;}
+        th{background:#1a3d16;color:#fff;padding:6px 8px;text-align:left;}
+        td{padding:6px 8px;border-bottom:1px solid #e0e8d8;}
+        .positive{color:#1a5c14;} .footer{margin-top:24px;font-size:11px;color:#999;}
+        @media print{body{padding:12px;}}
+      </style></head><body>
+      <h1>📊 Plaa Tapian — 月次レポート ${currentMonth}</h1>
+      <div class="metrics">
+        <div class="metric"><div class="metric-label">売上合計</div><div class="metric-value">฿${monthRev.toLocaleString()}</div></div>
+        <div class="metric"><div class="metric-label">粗利合計</div><div class="metric-value positive">฿${monthGP.toLocaleString()}</div></div>
+        <div class="metric"><div class="metric-label">粗利率</div><div class="metric-value">${(monthRate*100).toFixed(1)}%</div></div>
+        <div class="metric"><div class="metric-label">取引件数</div><div class="metric-value">${monthLogs.length}件</div></div>
+      </div>
+      <div class="group-row">
+        <div class="group-box"><div class="metric-label">A グループ（正規）</div><div class="metric-value">฿${monthARev.toLocaleString()}</div></div>
+        <div class="group-box"><div class="metric-label">K グループ（非正規）</div><div class="metric-value">฿${monthKRev.toLocaleString()}</div></div>
+      </div>
+      <h2>商品別売上</h2>
+      <table><thead><tr><th>商品名</th><th>G</th><th>販売数</th><th>売上</th><th>粗利</th><th>粗利率</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div class="footer">出力日時: ${new Date().toLocaleString('ja-JP')} — Plaa Tapian 在庫管理システム</div>
+      </body></html>`);
+    win.document.close();
+    setTimeout(()=>win.print(), 500);
+  };
+
+  // スプレッドシートに月次サマリーを出力
+  const exportToSheet = async () => {
+    if (!currentMonth) return showToast('月を選択してください');
+    setExporting(true);
+    const summary = {
+      month: currentMonth,
+      totalRev: monthRev,
+      totalGP: monthGP,
+      totalRate: Math.round(monthRate*1000)/10,
+      aRev: monthARev,
+      kRev: monthKRev,
+      txCount: monthLogs.length,
+      products: prodStats.map(p=>({name:p.name,qty:p.soldQty,rev:p.rev,gp:p.gp}))
+    };
+    await apiPost(gasUrl,{action:'exportMonthlyReport',summary});
+    setExporting(false);
+    showToast(`${currentMonth}の月次レポートをスプレッドシートに出力しました`);
+  };
+
+  return (
+    <div>
+      <GroupTabs value={gf} onChange={setGf} labels={[['all','A + K 合算'],['A','A グループ'],['K','K グループ']]}/>
+
+      {/* サマリーメトリクス */}
+      <div className="metrics">
+        <div className="metric"><div className="metric-label">売上合計(30日)</div><div className="metric-value">{THB(totalRev)}</div></div>
+        <div className="metric"><div className="metric-label">粗利合計(30日)</div><div className={`metric-value ${totalGP>=0?'positive':'negative'}`}>{THB(totalGP)}</div></div>
+        <div className="metric"><div className="metric-label">平均粗利率</div><div className="metric-value">{PCT(totalRate)}</div></div>
+        <div className="metric"><div className="metric-label">商品数</div><div className="metric-value">{allProdStats.filter(p=>p.rev>0).length}</div></div>
+      </div>
+
+      {/* 月次推移グラフ */}
+      {monthly.length > 0 && (
+        <div className="card">
+          <div className="card-title">月次売上推移</div>
+          <MiniBarChart data={[...monthly].reverse()} labelKey="month" valueKey="rev" color="#1a3d16"/>
+          <div style={{marginTop:12}}>
+            <div style={{fontSize:12,color:'var(--muted)',marginBottom:6,fontWeight:600}}>月次粗利推移</div>
+            <MiniBarChart data={[...monthly].reverse()} labelKey="month" valueKey="gp" color="#C8A84B"/>
+          </div>
+        </div>
+      )}
+
+      {/* 月次詳細レポート */}
+      <div className="card">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div className="card-title" style={{marginBottom:0,borderBottom:'none',paddingBottom:0}}>月次詳細レポート</div>
+          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <select value={currentMonth} onChange={e=>setSelMonth(e.target.value)} style={{width:'auto',fontSize:13}}>
+              {months.map(m=><option key={m} value={m}>{m}</option>)}
+            </select>
+            <button className="btn btn-sm" onClick={printReport}>🖨 印刷/PDF</button>
+            <button className="btn btn-sm btn-primary" onClick={exportToSheet} disabled={exporting}>
+              {exporting?'出力中...':'📊 シートに出力'}
+            </button>
+          </div>
+        </div>
+
+        {/* 月次サマリー */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:8,marginBottom:14}}>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>売上合計</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a3d16'}}>{THB(monthRev)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>粗利合計</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a5c14'}}>{THB(monthGP)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #C8A84B',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>A グループ</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#185FA5'}}>{THB(monthARev)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #C8A84B',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>K グループ</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#8B2E8B'}}>{THB(monthKRev)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>粗利率</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a3d16'}}>{PCT(monthRate)}</div>
+          </div>
+          <div style={{background:'#f5faf4',border:'2px solid #1a3d16',borderRadius:8,padding:10}}>
+            <div style={{fontSize:11,color:'var(--muted)'}}>取引件数</div>
+            <div style={{fontSize:18,fontWeight:700,color:'#1a3d16'}}>{monthLogs.length}件</div>
+          </div>
+        </div>
+
+        {/* 商品別グラフ */}
+        {prodStats.length > 0 && (
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600}}>商品別売上（{currentMonth}）</div>
+            <MiniBarChart data={prodStats} labelKey="name" valueKey="rev" color="#1a3d16" maxItems={10}/>
+          </div>
+        )}
+
+        {/* 商品別テーブル */}
+        {prodStats.length===0?<div className="empty">{currentMonth}のデータがありません</div>:
+        <div style={{overflowX:'auto'}}><table>
+          <thead><tr><th>商品名</th><th>G</th><th>販売数</th><th>売上</th><th>粗利</th><th>粗利率</th></tr></thead>
+          <tbody>{prodStats.map(p=><tr key={p.id}>
+            <td>{p.name}</td><td><GBadge g={p.group}/></td><td>{p.soldQty}</td>
+            <td>{THB(p.rev)}</td>
+            <td className={p.gp>=0?'positive':'negative'}>{THB(p.gp)}</td>
+            <td>{PCT(p.rate)}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      </div>
+
+      {/* 全期間商品別 */}
+      <div className="card">
+        <div className="card-title">商品別累計実績（全期間）</div>
+        {allProdStats.filter(p=>p.rev>0).length===0?<div className="empty">データがありません</div>:
+        <div style={{overflowX:'auto'}}><table>
+          <thead><tr><th>商品名</th><th>G</th><th>販売数</th><th>売上合計</th><th>粗利合計</th><th>粗利率</th></tr></thead>
+          <tbody>{allProdStats.filter(p=>p.rev>0).map(p=><tr key={p.id}>
+            <td>{p.name}</td><td><GBadge g={p.group}/></td><td>{p.soldQty}</td>
+            <td>{THB(p.rev)}</td>
+            <td className={p.gp>=0?'positive':'negative'}>{THB(p.gp)}</td>
+            <td>{PCT(p.rate)}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      </div>
+    </div>
+  );
+}
+
+
+const CATEGORIES = ['食品・飲料','雑貨・日用品','ファッション・テキスタイル','お土産・ギフト','その他・未分類'];
+const STATUSES   = ['検討中','発注済','商品化済','却下'];
+const STATUS_COLOR = {'検討中':'badge-info','発注済':'badge-warn','商品化済':'badge-ok','却下':'badge-danger'};
+
+// 画像から抽出した初期メモデータ
+const INITIAL_MEMOS = [
+  {name:'ナムプンドゥアンハー（お茶屋にて）',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'コーヒーの花ハチミツ',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'子供のタイ衣装',category:'ファッション・テキスタイル',status:'検討中',note:'◎'},
+  {name:'袋入り塩',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'ナムタンマプラオ',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'ムルック',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'ラープパナナチップ',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'ディスプレイ用輪飾り',category:'雑貨・日用品',status:'検討中',note:'●'},
+  {name:'セブンのドライバナナ',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'タイモチーフリングプリオーダー',category:'お土産・ギフト',status:'検討中',note:'◎ 卸値700B'},
+  {name:'タイシルク枕カバーとクッション',category:'ファッション・テキスタイル',status:'検討中',note:'◎'},
+  {name:'子供Tシャツ スパンブリのソンダム刺繍 デニムポケット付き',category:'ファッション・テキスタイル',status:'検討中',note:'◎'},
+  {name:'パンダバスと提携・ツアー監修',category:'その他・未分類',status:'検討中',note:'◎'},
+  {name:'OTOPプロダクツのスパ',category:'雑貨・日用品',status:'検討中',note:'◎'},
+  {name:'ムアックさんコラボ タイシルクキャップ',category:'ファッション・テキスタイル',status:'検討中',note:'◎'},
+  {name:'ムアックさんコラボ 農村ハット（海やシミトリ後）',category:'ファッション・テキスタイル',status:'検討中',note:'◎🔴'},
+  {name:'象さんの大ちゃん枕',category:'雑貨・日用品',status:'検討中',note:'◎'},
+  {name:'持ち手なしゴックのスクエア整理ボックス',category:'雑貨・日用品',status:'検討中',note:'◎'},
+  {name:'バナナの葉',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'クレッキー',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'パイナケーキ',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'カオマンガイの素',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'タイ文字軽石（DIP10 コラート産ヒンサーイ）',category:'雑貨・日用品',status:'検討中',note:'◎ 100B/個、10個以上50B、穴あり・文字あり'},
+  {name:'グアバクッキー',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'ここ夏ウォーター・ファイバー',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'ドライマンゴー',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'抜け感ヘアターバン',category:'ファッション・テキスタイル',status:'検討中',note:'◎'},
+  {name:'エアコンカーディガン',category:'ファッション・テキスタイル',status:'検討中',note:'◎'},
+  {name:'ゲサラックでブックスタンドとか',category:'雑貨・日用品',status:'検討中',note:'◎'},
+  {name:'靴下',category:'ファッション・テキスタイル',status:'検討中',note:'● 50B・20足で30B'},
+  {name:'バナナパウダー',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'カオポートクア',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'クレッキー シリアル ラングドシャ',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'マヨンチットジャム',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'マヨンチットオップヘーン',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'ニワトリ',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'カシューナッツ',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'カオマンガイ',category:'食品・飲料',status:'検討中',note:'◎'},
+  {name:'アーモンド',category:'食品・飲料',status:'検討中',note:'●'},
+  {name:'ホーローメジャーカップ',category:'雑貨・日用品',status:'検討中',note:'🔴'},
+  {name:'氷のバケツコマパットでオリジナルノベルティ（トリートメントパウチ、マギーパウチ、コーヒースティック、ハチミツパウチ）',category:'お土産・ギフト',status:'検討中',note:''},
+  {name:'scrap shopの商品オーダー',category:'その他・未分類',status:'検討中',note:''},
+  {name:'キウイの包丁',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'パロットの石鹸',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'バンブーストロー',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'ラップカッター',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'ジャスミン茶ヤワラー',category:'食品・飲料',status:'検討中',note:''},
+  {name:'マンゴータイティー・ココナツタイティー・インスタントコーヒー',category:'食品・飲料',status:'検討中',note:''},
+  {name:'パイナップルパイ1個売り',category:'食品・飲料',status:'検討中',note:'🔴'},
+  {name:'ココナツシュガーミルクタブレット',category:'食品・飲料',status:'検討中',note:''},
+  {name:'ライスワッフル',category:'食品・飲料',status:'検討中',note:''},
+  {name:'お魚のペンケース',category:'お土産・ギフト',status:'検討中',note:'🔴'},
+  {name:'マンゴーグミ',category:'食品・飲料',status:'検討中',note:''},
+  {name:'CS NEWバージョン',category:'その他・未分類',status:'検討中',note:''},
+  {name:'パイナップルクッキー だいびんぐ船',category:'食品・飲料',status:'検討中',note:''},
+  {name:'この前のスパイス',category:'食品・飲料',status:'検討中',note:''},
+  {name:'マギーの小袋',category:'食品・飲料',status:'検討中',note:''},
+  {name:'ドリップコーヒー ルーイ県',category:'食品・飲料',status:'検討中',note:''},
+  {name:'在タイのお父さん向けショッピングバッグ',category:'お土産・ギフト',status:'検討中',note:''},
+  {name:'ゴーガイの本',category:'お土産・ギフト',status:'検討中',note:''},
+  {name:'タイ柄ノート',category:'お土産・ギフト',status:'検討中',note:'🔴'},
+  {name:'スプーンフォークセット',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'バターナイフ',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'カノムトゥアイ',category:'食品・飲料',status:'検討中',note:''},
+  {name:'お魚ペンケース',category:'お土産・ギフト',status:'検討中',note:''},
+  {name:'花型コースター',category:'雑貨・日用品',status:'検討中',note:'●'},
+  {name:'サランラップホルダー',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'日傘雨傘',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'お土産特需の説明',category:'その他・未分類',status:'検討中',note:''},
+  {name:'ブロックプリント枕カバー',category:'ファッション・テキスタイル',status:'検討中',note:''},
+  {name:'ワイティアムバッグ',category:'ファッション・テキスタイル',status:'検討中',note:''},
+  {name:'タイ文字時計',category:'お土産・ギフト',status:'検討中',note:''},
+  {name:'クラジュートのコンセントカバー',category:'雑貨・日用品',status:'検討中',note:''},
+  {name:'タイ文字入りクロックヒン',category:'お土産・ギフト',status:'検討中',note:'本帰国に'},
+  {name:'カノムマーイ＆ブラックコーヒー',category:'食品・飲料',status:'検討中',note:''},
+];
+
+function Memo({data, gasUrl, reload, showToast}) {
+  const dynCategories = (data.categories||[]).map(c=>c.name);
+  const [filter, setFilter]   = useState('all');
+  const [catFilter, setCat]   = useState('all');
+  const [search, setSearch]   = useState('');
+  const [editing, setEditing] = useState(null);
+  const [form, setForm]       = useState({name:'',category:'食品・飲料',status:'検討中',note:''});
+  const [showAdd, setShowAdd] = useState(false);
+  const [imported, setImported] = useState(false);
+  const f = k => e => setForm(p=>({...p,[k]:e.target.value}));
+
+  const memos = (data.memos||[]).filter(m => {
+    if (filter !== 'all' && m.status !== filter) return false;
+    if (catFilter !== 'all' && m.category !== catFilter) return false;
+    if (search && !m.name.includes(search) && !m.note.includes(search)) return false;
+    return true;
+  });
+
+  const add = async () => {
+    if (!form.name) return showToast('商品名を入力してください');
+    await apiPost(gasUrl, {action:'addMemo', ...form});
+    setForm({name:'',category:'食品・飲料',status:'検討中',note:''});
+    setShowAdd(false);
+    showToast(`「${form.name}」を追加しました`);
+    setTimeout(reload, 1000);
+  };
+
+  const save = async () => {
+    await apiPost(gasUrl, {action:'updateMemo', ...editing});
+    setEditing(null);
+    showToast('更新しました');
+    setTimeout(reload, 1000);
+  };
+
+  const del = async (m) => {
+    if (!confirm(`「${m.name}」を削除しますか？`)) return;
+    await apiPost(gasUrl, {action:'deleteMemo', id:m.id});
+    showToast('削除しました');
+    setTimeout(reload, 1000);
+  };
+
+  const importInitial = async () => {
+    if (!confirm(`${INITIAL_MEMOS.length}件のメモを一括インポートします。よろしいですか？`)) return;
+    await apiPost(gasUrl, {action:'bulkAddMemos', memos:INITIAL_MEMOS});
+    setImported(true);
+    showToast(`${INITIAL_MEMOS.length}件をインポートしました`);
+    setTimeout(reload, 2000);
+  };
+
+  const exportText = () => {
+    const lines = [`Plaa Tapian — 仕入れアイデアメモ`, `出力日: ${new Date().toLocaleDateString('ja-JP')}`, ``, `合計: ${memos.length}件`, ``];
+    CATEGORIES.forEach(cat => {
+      const items = memos.filter(m => m.category === cat);
+      if (items.length === 0) return;
+      lines.push(`【${cat}】（${items.length}件）`);
+      items.forEach(m => {
+        lines.push(`  [${m.status}] ${m.name}${m.note ? ' — ' + m.note : ''}`);
+      });
+      lines.push('');
+    });
+    const blob = new Blob([lines.join('\n')], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `仕入れメモ_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'-')}.txt`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('テキストをエクスポートしました');
+  };
+
+  const statusCount = s => (data.memos||[]).filter(m => m.status === s).length;
+
+  return (
+    <div>
+      {/* サマリ */}
+      <div className="metrics" style={{gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))'}}>
+        <div className="metric"><div className="metric-label">合計</div><div className="metric-value">{(data.memos||[]).length}</div></div>
+        {STATUSES.map(s => <div key={s} className="metric"><div className="metric-label">{s}</div><div className="metric-value">{statusCount(s)}</div></div>)}
+      </div>
+
+      {/* 初期インポートボタン（データが0件のとき） */}
+      {(data.memos||[]).length === 0 && !imported && (
+        <div className="card" style={{textAlign:'center',padding:'2rem'}}>
+          <div style={{fontSize:14,marginBottom:12,color:'var(--muted)'}}>メモがありません。画像から抽出した{INITIAL_MEMOS.length}件を一括インポートできます。</div>
+          <button className="btn btn-primary" onClick={importInitial}>📋 メモを一括インポート（{INITIAL_MEMOS.length}件）</button>
+        </div>
+      )}
+
+      {/* ツールバー */}
+      <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,alignItems:'center'}}>
+        <input placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:160,padding:'7px 10px',fontSize:13}}/>
+        <select value={filter} onChange={e=>setFilter(e.target.value)} style={{fontSize:13,padding:'7px 10px'}}>
+          <option value="all">全ステータス</option>
+          {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={catFilter} onChange={e=>setCat(e.target.value)} style={{fontSize:13,padding:'7px 10px'}}>
+          <option value="all">全カテゴリ</option>
+          {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+        <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+          <button className="btn btn-sm" onClick={exportText}>↓ エクスポート</button>
+          <button className="btn btn-primary btn-sm" onClick={()=>setShowAdd(v=>!v)}>＋ 追加</button>
+        </div>
+      </div>
+
+      {/* 新規追加フォーム */}
+      {showAdd && (
+        <div className="card">
+          <div className="card-title">新規メモ追加</div>
+          <div className="form-grid">
+            <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名・アイデア</label><input placeholder="例: ドライマンゴー" value={form.name} onChange={f('name')}/></div>
+            <div className="form-group"><label>カテゴリ</label><select value={form.category} onChange={f('category')}>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></div>
+            <div className="form-group"><label>ステータス</label><select value={form.status} onChange={f('status')}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></div>
+            <div className="form-group" style={{gridColumn:'span 2'}}><label>備考</label><input placeholder="仕入れ先・価格・メモなど" value={form.note} onChange={f('note')}/></div>
+          </div>
+          <div className="actions"><button className="btn" onClick={()=>setShowAdd(false)}>キャンセル</button><button className="btn btn-primary" onClick={add}>追加する</button></div>
+        </div>
+      )}
+
+      {/* メモ一覧 */}
+      {memos.length === 0 && (data.memos||[]).length > 0 ? <div className="empty">該当するメモがありません</div> :
+      memos.length > 0 && (
+        <div className="card">
+          <div className="card-title">{memos.length}件</div>
+          <div style={{overflowX:'auto'}}><table>
+            <thead><tr><th>商品名・アイデア</th><th>カテゴリ</th><th>ステータス</th><th>備考</th><th></th></tr></thead>
+            <tbody>{memos.map(m => editing?.id === m.id ? (
+              <tr key={m.id}>
+                <td><input value={editing.name} onChange={e=>setEditing(p=>({...p,name:e.target.value}))} style={{width:'100%'}}/></td>
+                <td><select value={editing.category} onChange={e=>setEditing(p=>({...p,category:e.target.value}))}>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></td>
+                <td><select value={editing.status} onChange={e=>setEditing(p=>({...p,status:e.target.value}))}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></td>
+                <td><input value={editing.note} onChange={e=>setEditing(p=>({...p,note:e.target.value}))} style={{width:'100%'}}/></td>
+                <td style={{whiteSpace:'nowrap',display:'flex',gap:4}}><button className="btn btn-sm btn-primary" onClick={save}>保存</button><button className="btn btn-sm" onClick={()=>setEditing(null)}>✕</button></td>
+              </tr>
+            ) : (
+              <tr key={m.id}>
+                <td style={{fontWeight:500}}>{m.name}</td>
+                <td><span style={{fontSize:11,color:'var(--muted)'}}>{m.category}</span></td>
+                <td><span className={`badge ${STATUS_COLOR[m.status]||'badge-info'}`}>{m.status}</span></td>
+                <td style={{fontSize:12,color:'var(--muted)',maxWidth:200}}>{m.note}</td>
+                <td style={{whiteSpace:'nowrap'}}><button className="btn btn-sm" onClick={()=>setEditing({...m})} style={{marginRight:4}}>編集</button><button className="btn btn-sm btn-danger" onClick={()=>del(m)}>削除</button></td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function CategoryManager({categories, gasUrl, reload, showToast}) {
+  const [code, setCode]       = useState('');
+  const [name, setName]       = useState('');
+  const [editing, setEditing] = useState(null); // 編集中のcode
+
+  const add = async () => {
+    if (!code || !name) return showToast('コードと名前を入力してください');
+    if (code.length !== 2) return showToast('コードは2文字で入力してください');
+    await apiPost(gasUrl, {action:'addCategory', code:code.toUpperCase(), name});
+    setCode(''); setName('');
+    showToast(`「${code.toUpperCase()} — ${name}」を追加しました`);
+    setTimeout(reload, 1000);
+  };
+
+  const del = async (c) => {
+    if (!confirm(`「${c.code} — ${c.name}」を削除しますか？`)) return;
+    await apiPost(gasUrl, {action:'deleteCategory', code:c.code});
+    showToast('削除しました');
+    setTimeout(reload, 1000);
+  };
+
+  const saveEdit = async () => {
+    if (!editing.name) return showToast('カテゴリ名を入力してください');
+    await apiPost(gasUrl, {action:'updateCategory', code:editing.code, name:editing.name});
+    setEditing(null);
+    showToast('カテゴリ名を更新しました');
+    setTimeout(reload, 1000);
+  };
+
+  return (
+    <div className="card">
+      <div className="card-title">カテゴリ管理</div>
+      <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+        <input placeholder="2文字コード (例: FO)" value={code} onChange={e=>setCode(e.target.value.toUpperCase())} style={{width:140}} maxLength={2}/>
+        <input placeholder="カテゴリ名 (例: 食品・飲料)" value={name} onChange={e=>setName(e.target.value)} style={{flex:1,minWidth:160}}/>
+        <button className="btn btn-primary" onClick={add}>追加</button>
+      </div>
+      <div style={{overflowX:'auto'}}><table>
+        <thead><tr><th>コード</th><th>カテゴリ名</th><th>登録日</th><th></th></tr></thead>
+        <tbody>{(categories||[]).map(c=>(
+          <tr key={c.code}>
+            <td><span style={{fontFamily:'monospace',fontWeight:600,color:'var(--teal)'}}>{c.code}</span></td>
+            <td>{editing?.code===c.code
+              ? <input value={editing.name} onChange={e=>setEditing(p=>({...p,name:e.target.value}))} style={{width:'100%'}} autoFocus/>
+              : c.name}
+            </td>
+            <td style={{fontSize:11,color:'var(--hint)'}}>{c.createdAt}</td>
+            <td style={{whiteSpace:'nowrap',display:'flex',gap:4}}>
+              {editing?.code===c.code
+                ? <><button className="btn btn-sm btn-primary" onClick={saveEdit}>保存</button><button className="btn btn-sm" onClick={()=>setEditing(null)}>✕</button></>
+                : <><button className="btn btn-sm" onClick={()=>setEditing({...c})}>編集</button><button className="btn btn-sm btn-danger" onClick={()=>del(c)}>削除</button></>
+              }
+            </td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+    </div>
+  );
+}
+
+function Settings({gasUrl,setGasUrl,reload,showToast}) {
+  const [url,setUrl] = useState(gasUrl);
+  return (
+    <div className="card">
+      <div className="card-title">接続設定</div>
+      <div className="form-group" style={{marginBottom:12}}>
+        <label>GAS Web App URL</label>
+        <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://script.google.com/macros/s/..."/>
+      </div>
+      <div className="actions">
+        <button className="btn btn-primary" onClick={()=>{setGasUrl(url);showToast('URLを保存しました');setTimeout(reload,500);}}>保存して再接続</button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
