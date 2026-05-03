@@ -349,10 +349,24 @@ function Dashboard({data}) {
 
 function Products({data,gasUrl,reload,showToast,categories}) {
   const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A',categoryCode:'',categoryName:'',memo:''};
-  const [form,setForm] = useState(init);
+  const [form,setForm]     = useState(init);
+  const [editing,setEditing] = useState(null); // 編集中の商品
   const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
   const nameRef = useRef(null);
   useEffect(()=>{ if(nameRef.current) nameRef.current.focus(); },[]);
+
+  const saveEdit = async(p) => {
+    await apiPost(gasUrl,{action:'updateProduct',
+      id:p.id, name:editing.name, group:p.group,
+      categoryCode:p.categoryCode, categoryName:p.categoryName,
+      cost:parseFloat(editing.cost)||0, price:parseFloat(editing.price)||0,
+      stock:parseInt(editing.stock)||0, minStock:parseInt(editing.minStock)||0,
+      memo:editing.memo||''
+    });
+    setEditing(null);
+    showToast('更新しました');
+    setTimeout(reload,1000);
+  };
 
   const add = async()=>{
     if(!form.name||!form.price) return showToast('商品名と販売価格は必須です');
@@ -416,17 +430,26 @@ function Products({data,gasUrl,reload,showToast,categories}) {
           </div>
           {data.products.filter(p=>(p.group||'A')===g).length===0?<div className="empty">商品がありません</div>:
           <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>ID</th><th>商品名</th><th>カテゴリ</th><th>仕入単価</th><th>販売価格</th><th>利益率</th><th>在庫</th><th></th></tr></thead>
+            <thead><tr><th>ID</th><th>商品名</th><th>カテゴリ</th><th>仕入単価</th><th>販売価格</th><th>利益率</th><th>在庫</th><th>最低在庫</th><th>メモ</th><th></th></tr></thead>
             <tbody>{data.products.filter(p=>(p.group||'A')===g).map(p=>{
               const m = p.price>0?(p.price-p.cost)/p.price:0;
-              return <tr key={p.id}>
+              const isEditing = editing?.id===p.id;
+              return <tr key={p.id} style={{background:isEditing?'#f5fdf5':''}}>
                 <td><span style={{fontFamily:'monospace',fontSize:11,color:'var(--muted)'}}>{p.id}</span></td>
-                <td>{p.name}</td>
-                <td><span style={{fontSize:11,color:'var(--muted)'}}>{p.categoryCode||'–'} {p.categoryName?'— '+p.categoryName:''}</span></td>
-                <td>{THB(p.cost)}</td><td>{THB(p.price)}</td>
+                <td>{isEditing?<input value={editing.name} onChange={e=>setEditing(v=>({...v,name:e.target.value}))} style={{width:'100%'}}/>:p.name}</td>
+                <td><span style={{fontSize:11,color:'var(--muted)'}}>{p.categoryCode||'–'}{p.categoryName?' — '+p.categoryName:''}</span></td>
+                <td>{isEditing?<input type="number" value={editing.cost} onChange={e=>setEditing(v=>({...v,cost:e.target.value}))} style={{width:80}}/>:THB(p.cost)}</td>
+                <td>{isEditing?<input type="number" value={editing.price} onChange={e=>setEditing(v=>({...v,price:e.target.value}))} style={{width:80}}/>:THB(p.price)}</td>
                 <td className={m>=0?'positive':'negative'}>{PCT(m)}</td>
                 <td>{p.stock}</td>
-                <td><button className="btn btn-sm btn-danger" onClick={()=>del(p)}>削除</button></td>
+                <td>{isEditing?<input type="number" value={editing.minStock} onChange={e=>setEditing(v=>({...v,minStock:e.target.value}))} style={{width:60}}/>:<span style={{fontWeight:p.minStock>0?600:400,color:p.minStock>0?'#1a3d16':'var(--hint)'}}>{p.minStock>0?p.minStock:'–'}</span>}</td>
+                <td>{isEditing?<input value={editing.memo||''} onChange={e=>setEditing(v=>({...v,memo:e.target.value}))} style={{width:'100%'}}/>:<span style={{fontSize:11,color:'var(--muted)'}}>{p.memo||''}</span>}</td>
+                <td style={{whiteSpace:'nowrap'}}>
+                  {isEditing
+                    ?<><button className="btn btn-sm btn-primary" onClick={()=>saveEdit(p)} style={{marginRight:4}}>保存</button><button className="btn btn-sm" onClick={()=>setEditing(null)}>✕</button></>
+                    :<><button className="btn btn-sm" onClick={()=>setEditing({id:p.id,name:p.name,cost:p.cost,price:p.price,stock:p.stock,minStock:p.minStock,memo:p.memo||''})} style={{marginRight:4}}>編集</button><button className="btn btn-sm btn-danger" onClick={()=>del(p)}>削除</button></>
+                  }
+                </td>
               </tr>;
             })}</tbody>
           </table></div>}
