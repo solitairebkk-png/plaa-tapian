@@ -351,6 +351,8 @@ function Products({data,gasUrl,reload,showToast,categories}) {
   const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A',categoryCode:'',categoryName:'',memo:''};
   const [form,setForm] = useState(init);
   const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
+  const nameRef = useRef(null);
+  useEffect(()=>{ if(nameRef.current) nameRef.current.focus(); },[]);
 
   const add = async()=>{
     if(!form.name||!form.price) return showToast('商品名と販売価格は必須です');
@@ -380,7 +382,7 @@ function Products({data,gasUrl,reload,showToast,categories}) {
       <div className="card">
         <div className="card-title">新商品登録</div>
         <div className="form-grid">
-          <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名</label><input placeholder="例: マンゴー" value={form.name} onChange={f('name')}/></div>
+          <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名</label><input ref={nameRef} placeholder="例: マンゴー" value={form.name} onChange={f('name')}/></div>
           <div className="form-group">
             <label>カテゴリ</label>
             <select value={form.categoryCode} onChange={e=>{
