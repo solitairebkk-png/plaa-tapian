@@ -440,7 +440,7 @@ function Products({data,gasUrl,reload,showToast,categories,pendingProduct,clearP
           </div>
           {data.products.filter(p=>(p.group||'A')===g).length===0?<div className="empty">商品がありません</div>:
           <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>ID</th><th>商品名</th><th>G</th><th>カテゴリ</th><th>仕入単価</th><th>販売価格</th><th>利益率</th><th>在庫</th><th>最低在庫</th><th>メモ</th><th></th></tr></thead>
+            <thead><tr><th>ID</th><th>商品名</th><th>G</th><th>カテゴリ</th><th>販売価格</th><th>仕入単価</th><th>利益率</th><th>在庫</th><th>最低在庫</th><th>メモ</th><th></th></tr></thead>
             <tbody>{data.products.filter(p=>(p.group||'A')===g).map(p=>{
               const m = p.price>0?(p.price-p.cost)/p.price:0;
               const isEditing = editing?.id===p.id;
@@ -460,8 +460,8 @@ function Products({data,gasUrl,reload,showToast,categories,pendingProduct,clearP
                   </select>
                   :<span style={{fontSize:11,color:'var(--muted)'}}>{p.categoryCode||'–'}{p.categoryName?' — '+p.categoryName:''}</span>}
                 </td>
-                <td>{isEditing?<input type="number" value={editing.cost} onChange={e=>setEditing(v=>({...v,cost:e.target.value}))} style={{width:80}}/>:THB(p.cost)}</td>
                 <td>{isEditing?<input type="number" value={editing.price} onChange={e=>setEditing(v=>({...v,price:e.target.value}))} style={{width:80}}/>:THB(p.price)}</td>
+                <td>{isEditing?<input type="number" value={editing.cost} onChange={e=>setEditing(v=>({...v,cost:e.target.value}))} style={{width:80}}/>:THB(p.cost)}</td>
                 <td className={m>=0?'positive':'negative'}>{PCT(m)}</td>
                 <td>{p.stock}</td>
                 <td>{isEditing?<input type="number" value={editing.minStock} onChange={e=>setEditing(v=>({...v,minStock:e.target.value}))} style={{width:60}}/>:<span style={{fontWeight:p.minStock>0?600:400,color:p.minStock>0?'#1a3d16':'var(--hint)'}}>{p.minStock>0?p.minStock:'–'}</span>}</td>
