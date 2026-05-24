@@ -282,7 +282,7 @@ function App() {
 
       {loading && tab!=='sales' && <div className="loading">読み込み中...</div>}
       {!loading&&tab==='dashboard' && <Dashboard data={data}/>}
-      {!loading&&tab==='products'  && <Products  data={data} gasUrl={gasUrl} reload={load} showToast={showToast} categories={data.categories}/>}
+      {!loading&&tab==='products'  && <Products  data={data} gasUrl={gasUrl} reload={load} showToast={showToast} categories={data.categories} pendingProduct={pendingProduct} clearPending={()=>setPendingProduct(null)}/>}
       <div style={{display:tab==='sales'?'block':'none'}}>
         <Sales data={data} gasUrl={gasUrl} reloadProducts={async()=>{
           const p = await api(gasUrl,{action:'getProducts'});
@@ -347,13 +347,20 @@ function Dashboard({data}) {
   );
 }
 
-function Products({data,gasUrl,reload,showToast,categories}) {
+function Products({data,gasUrl,reload,showToast,categories,pendingProduct,clearPending}) {
   const init = {name:'',cost:'',price:'',stock:'',minStock:'0',group:'A',categoryCode:'',categoryName:'',memo:''};
   const [form,setForm]     = useState(init);
   const [editing,setEditing] = useState(null); // 編集中の商品
   const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
   const nameRef = useRef(null);
   useEffect(()=>{ if(nameRef.current) nameRef.current.focus(); },[]);
+  useEffect(()=>{
+    if(pendingProduct) {
+      setForm(p=>({...p, name:pendingProduct.name, group:pendingProduct.group||'A', memo:pendingProduct.note||''}));
+      clearPending();
+      setTimeout(()=>{ if(nameRef.current) nameRef.current.focus(); },100);
+    }
+  },[pendingProduct]);
 
   const saveEdit = async() => {
     const cat = (categories||[]).find(c=>c.code===editing.categoryCode);
@@ -1050,28 +1057,30 @@ const INITIAL_MEMOS = [
   {name:'カノムマーイ＆ブラックコーヒー',category:'食品・飲料',status:'検討中',note:''},
 ];
 
-function Memo({data, gasUrl, reload, showToast}) {
+function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
   const dynCategories = (data.categories||[]).map(c=>c.name);
   const [filter, setFilter]   = useState('all');
+  const [grpFilter, setGrp]   = useState('all');
   const [catFilter, setCat]   = useState('all');
   const [search, setSearch]   = useState('');
   const [editing, setEditing] = useState(null);
-  const [form, setForm]       = useState({name:'',category:'食品・飲料',status:'検討中',note:''});
+  const [form, setForm]       = useState({name:'',group:'A',category:'',status:'検討中',note:''});
   const [showAdd, setShowAdd] = useState(false);
   const [imported, setImported] = useState(false);
   const f = k => e => setForm(p=>({...p,[k]:e.target.value}));
 
   const memos = (data.memos||[]).filter(m => {
     if (filter !== 'all' && m.status !== filter) return false;
+    if (grpFilter !== 'all' && (m.group||'A') !== grpFilter) return false;
     if (catFilter !== 'all' && m.category !== catFilter) return false;
-    if (search && !m.name.includes(search) && !m.note.includes(search)) return false;
+    if (search && !m.name.includes(search) && !(m.note||'').includes(search)) return false;
     return true;
   });
 
   const add = async () => {
     if (!form.name) return showToast('商品名を入力してください');
     await apiPost(gasUrl, {action:'addMemo', ...form});
-    setForm({name:'',category:'食品・飲料',status:'検討中',note:''});
+    setForm({name:'',group:'A',category:'',status:'検討中',note:''});
     setShowAdd(false);
     showToast(`「${form.name}」を追加しました`);
     setTimeout(reload, 1000);
@@ -1106,7 +1115,7 @@ function Memo({data, gasUrl, reload, showToast}) {
       if (items.length === 0) return;
       lines.push(`【${cat}】（${items.length}件）`);
       items.forEach(m => {
-        lines.push(`  [${m.status}] ${m.name}${m.note ? ' — ' + m.note : ''}`);
+        lines.push(`  [${m.group||'A'}][${m.status}] ${m.name}${m.note ? ' — ' + m.note : ''}`);
       });
       lines.push('');
     });
@@ -1120,15 +1129,24 @@ function Memo({data, gasUrl, reload, showToast}) {
 
   const statusCount = s => (data.memos||[]).filter(m => m.status === s).length;
 
+  // 商品登録に転記
+  const toProduct = (m) => {
+    if (!confirm(`「${m.name}」を商品登録画面に転記しますか？`)) return;
+    onRegisterProduct({
+      name: m.name,
+      group: m.group || 'A',
+      note: m.note || '',
+    });
+    showToast(`「${m.name}」を商品登録に転記しました。商品管理タブを開いてください。`);
+  };
+
   return (
     <div>
-      {/* サマリ */}
       <div className="metrics" style={{gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))'}}>
         <div className="metric"><div className="metric-label">合計</div><div className="metric-value">{(data.memos||[]).length}</div></div>
         {STATUSES.map(s => <div key={s} className="metric"><div className="metric-label">{s}</div><div className="metric-value">{statusCount(s)}</div></div>)}
       </div>
 
-      {/* 初期インポートボタン（データが0件のとき） */}
       {(data.memos||[]).length === 0 && !imported && (
         <div className="card" style={{textAlign:'center',padding:'2rem'}}>
           <div style={{fontSize:14,marginBottom:12,color:'var(--muted)'}}>メモがありません。画像から抽出した{INITIAL_MEMOS.length}件を一括インポートできます。</div>
@@ -1136,9 +1154,13 @@ function Memo({data, gasUrl, reload, showToast}) {
         </div>
       )}
 
-      {/* ツールバー */}
       <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12,alignItems:'center'}}>
-        <input placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:160,padding:'7px 10px',fontSize:13}}/>
+        <input placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)} style={{width:140,padding:'7px 10px',fontSize:13}}/>
+        <select value={grpFilter} onChange={e=>setGrp(e.target.value)} style={{fontSize:13,padding:'7px 10px'}}>
+          <option value="all">全グループ</option>
+          <option value="A">A（正規）</option>
+          <option value="K">K（非正規）</option>
+        </select>
         <select value={filter} onChange={e=>setFilter(e.target.value)} style={{fontSize:13,padding:'7px 10px'}}>
           <option value="all">全ステータス</option>
           {STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
@@ -1153,13 +1175,18 @@ function Memo({data, gasUrl, reload, showToast}) {
         </div>
       </div>
 
-      {/* 新規追加フォーム */}
       {showAdd && (
         <div className="card">
           <div className="card-title">新規メモ追加</div>
           <div className="form-grid">
-            <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名・アイデア</label><input placeholder="例: ドライマンゴー" value={form.name} onChange={f('name')}/></div>
-            <div className="form-group"><label>カテゴリ</label><select value={form.category} onChange={f('category')}>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></div>
+            <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名・アイデア</label><input placeholder="例: ドライマンゴー" value={form.name} onChange={f('name')} autoFocus/></div>
+            <div className="form-group"><label>グループ</label>
+              <select value={form.group} onChange={f('group')}>
+                <option value="A">A グループ（正規）</option>
+                <option value="K">K グループ（非正規）</option>
+              </select>
+            </div>
+            <div className="form-group"><label>カテゴリ</label><select value={form.category} onChange={f('category')}><option value="">未分類</option>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></div>
             <div className="form-group"><label>ステータス</label><select value={form.status} onChange={f('status')}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></div>
             <div className="form-group" style={{gridColumn:'span 2'}}><label>備考</label><input placeholder="仕入れ先・価格・メモなど" value={form.note} onChange={f('note')}/></div>
           </div>
@@ -1167,28 +1194,35 @@ function Memo({data, gasUrl, reload, showToast}) {
         </div>
       )}
 
-      {/* メモ一覧 */}
       {memos.length === 0 && (data.memos||[]).length > 0 ? <div className="empty">該当するメモがありません</div> :
       memos.length > 0 && (
         <div className="card">
           <div className="card-title">{memos.length}件</div>
           <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>商品名・アイデア</th><th>カテゴリ</th><th>ステータス</th><th>備考</th><th></th></tr></thead>
+            <thead><tr><th>商品名・アイデア</th><th>G</th><th>カテゴリ</th><th>ステータス</th><th>備考</th><th></th></tr></thead>
             <tbody>{memos.map(m => editing?.id === m.id ? (
               <tr key={m.id}>
                 <td><input value={editing.name} onChange={e=>setEditing(p=>({...p,name:e.target.value}))} style={{width:'100%'}}/></td>
-                <td><select value={editing.category} onChange={e=>setEditing(p=>({...p,category:e.target.value}))}>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></td>
+                <td><select value={editing.group||'A'} onChange={e=>setEditing(p=>({...p,group:e.target.value}))} style={{width:55}}>
+                  <option value="A">A</option><option value="K">K</option>
+                </select></td>
+                <td><select value={editing.category} onChange={e=>setEditing(p=>({...p,category:e.target.value}))}><option value="">未分類</option>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></td>
                 <td><select value={editing.status} onChange={e=>setEditing(p=>({...p,status:e.target.value}))}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></td>
-                <td><input value={editing.note} onChange={e=>setEditing(p=>({...p,note:e.target.value}))} style={{width:'100%'}}/></td>
+                <td><input value={editing.note||''} onChange={e=>setEditing(p=>({...p,note:e.target.value}))} style={{width:'100%'}}/></td>
                 <td style={{whiteSpace:'nowrap',display:'flex',gap:4}}><button className="btn btn-sm btn-primary" onClick={save}>保存</button><button className="btn btn-sm" onClick={()=>setEditing(null)}>✕</button></td>
               </tr>
             ) : (
               <tr key={m.id}>
                 <td style={{fontWeight:500}}>{m.name}</td>
-                <td><span style={{fontSize:11,color:'var(--muted)'}}>{m.category}</span></td>
+                <td><GBadge g={m.group||'A'}/></td>
+                <td><span style={{fontSize:11,color:'var(--muted)'}}>{m.category||'未分類'}</span></td>
                 <td><span className={`badge ${STATUS_COLOR[m.status]||'badge-info'}`}>{m.status}</span></td>
-                <td style={{fontSize:12,color:'var(--muted)',maxWidth:200}}>{m.note}</td>
-                <td style={{whiteSpace:'nowrap'}}><button className="btn btn-sm" onClick={()=>setEditing({...m})} style={{marginRight:4}}>編集</button><button className="btn btn-sm btn-danger" onClick={()=>del(m)}>削除</button></td>
+                <td style={{fontSize:12,color:'var(--muted)',maxWidth:160}}>{m.note}</td>
+                <td style={{whiteSpace:'nowrap',display:'flex',gap:4}}>
+                  <button className="btn btn-sm" style={{background:'#d4edda',borderColor:'#1a3d16',color:'#1a3d16'}} onClick={()=>toProduct(m)}>商品登録</button>
+                  <button className="btn btn-sm" onClick={()=>setEditing({...m})}>編集</button>
+                  <button className="btn btn-sm btn-danger" onClick={()=>del(m)}>削除</button>
+                </td>
               </tr>
             ))}</tbody>
           </table></div>
