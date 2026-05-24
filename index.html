@@ -222,6 +222,7 @@ function App() {
   const [authed,setAuthed]       = useState(()=>sessionStorage.getItem(PASS_KEY)==='ok');
   const [gasUrl,setGasUrlState]  = useState(()=>localStorage.getItem(CONFIG_KEY)||DEFAULT_GAS);
   const [tab,setTab]             = useState('dashboard');
+  const [pendingProduct,setPendingProduct] = useState(null);
   const [data,setData]           = useState({products:[],sales:[],dashboard:{},memos:[],categories:[]});
   const [loading,setLoading]     = useState(false);
   const [toast,setToast]         = useState('');
