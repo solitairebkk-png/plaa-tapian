@@ -357,7 +357,7 @@ function Products({data,gasUrl,reload,showToast,categories,pendingProduct,clearP
   useEffect(()=>{ if(nameRef.current) nameRef.current.focus(); },[]);
   useEffect(()=>{
     if(pendingProduct) {
-      setForm(p=>({...p, name:pendingProduct.name, group:pendingProduct.group||'A', memo:pendingProduct.note||''}));
+      setForm(p=>({...p, name:pendingProduct.name, group:pendingProduct.group||'A', cost:pendingProduct.cost||'', price:pendingProduct.price||'', memo:pendingProduct.note||''}));
       clearPending();
       setTimeout(()=>{ if(nameRef.current) nameRef.current.focus(); },100);
     }
@@ -1065,7 +1065,7 @@ function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
   const [catFilter, setCat]   = useState('all');
   const [search, setSearch]   = useState('');
   const [editing, setEditing] = useState(null);
-  const [form, setForm]       = useState({name:'',group:'A',category:'',status:'検討中',note:''});
+  const [form, setForm]       = useState({name:'',group:'A',category:'',status:'検討中',note:'',cost:'',price:''});
   const [showAdd, setShowAdd] = useState(false);
   const [imported, setImported] = useState(false);
   const f = k => e => setForm(p=>({...p,[k]:e.target.value}));
@@ -1081,7 +1081,7 @@ function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
   const add = async () => {
     if (!form.name) return showToast('商品名を入力してください');
     await apiPost(gasUrl, {action:'addMemo', ...form});
-    setForm({name:'',group:'A',category:'',status:'検討中',note:''});
+    setForm({name:'',group:'A',category:'',status:'検討中',note:'',cost:'',price:''});
     setShowAdd(false);
     showToast(`「${form.name}」を追加しました`);
     setTimeout(reload, 1000);
@@ -1136,6 +1136,8 @@ function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
     onRegisterProduct({
       name: m.name,
       group: m.group || 'A',
+      cost: m.cost || 0,
+      price: m.price || 0,
       note: m.note || '',
     });
     showToast(`「${m.name}」を商品登録に転記しました。商品管理タブを開いてください。`);
@@ -1189,7 +1191,9 @@ function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
             </div>
             <div className="form-group"><label>カテゴリ</label><select value={form.category} onChange={f('category')}><option value="">未分類</option>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></div>
             <div className="form-group"><label>ステータス</label><select value={form.status} onChange={f('status')}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></div>
-            <div className="form-group" style={{gridColumn:'span 2'}}><label>備考</label><input placeholder="仕入れ先・価格・メモなど" value={form.note} onChange={f('note')}/></div>
+            <div className="form-group"><label>仕入価格 (THB)</label><input type="number" placeholder="0" value={form.cost} onChange={f('cost')}/></div>
+            <div className="form-group"><label>販売価格 (THB)</label><input type="number" placeholder="0" value={form.price} onChange={f('price')}/></div>
+            <div className="form-group" style={{gridColumn:'span 2'}}><label>備考</label><input placeholder="仕入れ先・メモなど" value={form.note} onChange={f('note')}/></div>
           </div>
           <div className="actions"><button className="btn" onClick={()=>setShowAdd(false)}>キャンセル</button><button className="btn btn-primary" onClick={add}>追加する</button></div>
         </div>
@@ -1200,7 +1204,7 @@ function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
         <div className="card">
           <div className="card-title">{memos.length}件</div>
           <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>商品名・アイデア</th><th>G</th><th>カテゴリ</th><th>ステータス</th><th>備考</th><th></th></tr></thead>
+            <thead><tr><th>商品名・アイデア</th><th>G</th><th>カテゴリ</th><th>ステータス</th><th>仕入価格</th><th>販売価格</th><th>備考</th><th></th></tr></thead>
             <tbody>{memos.map(m => editing?.id === m.id ? (
               <tr key={m.id}>
                 <td><input value={editing.name} onChange={e=>setEditing(p=>({...p,name:e.target.value}))} style={{width:'100%'}}/></td>
@@ -1209,6 +1213,8 @@ function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
                 </select></td>
                 <td><select value={editing.category} onChange={e=>setEditing(p=>({...p,category:e.target.value}))}><option value="">未分類</option>{dynCategories.map(c=><option key={c}>{c}</option>)}</select></td>
                 <td><select value={editing.status} onChange={e=>setEditing(p=>({...p,status:e.target.value}))}>{STATUSES.map(s=><option key={s}>{s}</option>)}</select></td>
+                <td><input type="number" value={editing.cost||''} onChange={e=>setEditing(p=>({...p,cost:e.target.value}))} style={{width:70}} placeholder="0"/></td>
+                <td><input type="number" value={editing.price||''} onChange={e=>setEditing(p=>({...p,price:e.target.value}))} style={{width:70}} placeholder="0"/></td>
                 <td><input value={editing.note||''} onChange={e=>setEditing(p=>({...p,note:e.target.value}))} style={{width:'100%'}}/></td>
                 <td style={{whiteSpace:'nowrap',display:'flex',gap:4}}><button className="btn btn-sm btn-primary" onClick={save}>保存</button><button className="btn btn-sm" onClick={()=>setEditing(null)}>✕</button></td>
               </tr>
@@ -1218,6 +1224,8 @@ function Memo({data, gasUrl, reload, showToast, onRegisterProduct}) {
                 <td><GBadge g={m.group||'A'}/></td>
                 <td><span style={{fontSize:11,color:'var(--muted)'}}>{m.category||'未分類'}</span></td>
                 <td><span className={`badge ${STATUS_COLOR[m.status]||'badge-info'}`}>{m.status}</span></td>
+                <td style={{fontSize:12,color:'var(--muted)',textAlign:'right'}}>{m.cost>0?THB(m.cost):'–'}</td>
+                <td style={{fontSize:12,color:'var(--muted)',textAlign:'right'}}>{m.price>0?THB(m.price):'–'}</td>
                 <td style={{fontSize:12,color:'var(--muted)',maxWidth:160}}>{m.note}</td>
                 <td style={{whiteSpace:'nowrap',display:'flex',gap:4}}>
                   <button className="btn btn-sm" style={{background:'#d4edda',borderColor:'#1a3d16',color:'#1a3d16'}} onClick={()=>toProduct(m)}>商品登録</button>
