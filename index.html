@@ -400,6 +400,13 @@ function Products({data,gasUrl,reload,showToast,categories}) {
         <div className="form-grid">
           <div className="form-group" style={{gridColumn:'span 2'}}><label>商品名</label><input ref={nameRef} placeholder="例: マンゴー" value={form.name} onChange={f('name')}/></div>
           <div className="form-group">
+            <label>グループ</label>
+            <select value={form.group} onChange={f('group')}>
+              <option value="A">A グループ（正規仕入れ）</option>
+              <option value="K">K グループ（非正規仕入れ）</option>
+            </select>
+          </div>
+          <div className="form-group">
             <label>カテゴリ</label>
             <select value={form.categoryCode} onChange={e=>{
               const code = e.target.value;
@@ -410,18 +417,11 @@ function Products({data,gasUrl,reload,showToast,categories}) {
               {(categories||[]).map(c=><option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
             </select>
           </div>
-          <div className="form-group"><label>販売価格 (THB)</label><input type="number" placeholder="0" value={form.price} onChange={f('price')}/></div>
-          <div className="form-group"><label>仕入単価 (THB)</label><input type="number" placeholder="0" value={form.cost} onChange={f('cost')}/></div>
+          <div className="form-group"><label>販売価格</label><input type="number" placeholder="0" value={form.price} onChange={f('price')}/></div>
+          <div className="form-group"><label>仕入単価</label><input type="number" placeholder="0" value={form.cost} onChange={f('cost')}/></div>
           <div className="form-group"><label>初期在庫数</label><input type="number" placeholder="0" value={form.stock} onChange={f('stock')}/></div>
-          <div className="form-group">
-            <label>グループ</label>
-            <select value={form.group} onChange={f('group')}>
-              <option value="A">A グループ（正規仕入れ）</option>
-              <option value="K">K グループ（非正規仕入れ）</option>
-            </select>
-          </div>
-          <div className="form-group" style={{gridColumn:'span 2'}}><label>メモ欄（自由記入）</label><input placeholder="仕入れ先・備考など" value={form.memo||''} onChange={f('memo')}/></div>
           <div className="form-group"><label>最低在庫アラート</label><input type="number" placeholder="0" value={form.minStock} onChange={f('minStock')}/></div>
+          <div className="form-group" style={{gridColumn:'span 2'}}><label>メモ欄（自由記入）</label><input placeholder="仕入れ先・備考など" value={form.memo||''} onChange={f('memo')}/></div>
         </div>
         <div className="actions"><button className="btn btn-primary" onClick={add}>追加する</button></div>
       </div>
@@ -432,13 +432,20 @@ function Products({data,gasUrl,reload,showToast,categories}) {
           </div>
           {data.products.filter(p=>(p.group||'A')===g).length===0?<div className="empty">商品がありません</div>:
           <div style={{overflowX:'auto'}}><table>
-            <thead><tr><th>ID</th><th>商品名</th><th>カテゴリ</th><th>仕入単価</th><th>販売価格</th><th>利益率</th><th>在庫</th><th>最低在庫</th><th>メモ</th><th></th></tr></thead>
+            <thead><tr><th>ID</th><th>商品名</th><th>G</th><th>カテゴリ</th><th>仕入単価</th><th>販売価格</th><th>利益率</th><th>在庫</th><th>最低在庫</th><th>メモ</th><th></th></tr></thead>
             <tbody>{data.products.filter(p=>(p.group||'A')===g).map(p=>{
               const m = p.price>0?(p.price-p.cost)/p.price:0;
               const isEditing = editing?.id===p.id;
               return <tr key={p.id} style={{background:isEditing?'#f5fdf5':''}}>
                 <td><span style={{fontFamily:'monospace',fontSize:11,color:'var(--muted)'}}>{p.id}</span></td>
                 <td>{isEditing?<input value={editing.name} onChange={e=>setEditing(v=>({...v,name:e.target.value}))} style={{width:'100%'}}/>:p.name}</td>
+                <td>{isEditing
+                  ?<select value={editing.group} onChange={e=>setEditing(v=>({...v,group:e.target.value}))} style={{fontSize:12,width:55}}>
+                    <option value="A">A</option>
+                    <option value="K">K</option>
+                  </select>
+                  :<GBadge g={p.group}/>}
+                </td>
                 <td>{isEditing
                   ?<select value={editing.categoryCode} onChange={e=>setEditing(v=>({...v,categoryCode:e.target.value}))} style={{fontSize:12}}>
                     {(categories||[]).map(c=><option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
