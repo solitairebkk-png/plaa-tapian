@@ -379,7 +379,7 @@ function Products({data,gasUrl,reload,showToast,categories,pendingProduct,clearP
   };
 
   const add = async()=>{
-    if(!form.name||!form.price) return showToast('商品名と販売価格は必須です');
+    if(!form.name) return showToast('商品名は必須です');
     if(!form.categoryCode) return showToast('カテゴリを選択してください');
     await apiPost(gasUrl,{action:'addProduct',...form,
       categoryCode: form.categoryCode,
@@ -689,17 +689,39 @@ function Sales({data,gasUrl,reloadProducts,showToast}) {
 }
 
 function Restock({data,gasUrl,reload,showToast}) {
-  const [form,setForm] = useState({id:'',qty:'',cost:''});
+  const initForm = {id:'',qty:'',cost:'',hasTaxInvoice:false,paymentReceived:false,noTaxInvoice:false,image:null,imagePreview:null,imageNote:''};
+  const [form,setForm] = useState(initForm);
   const f = k=>e=>setForm(p=>({...p,[k]:e.target.value}));
+  const fc = k=>e=>setForm(p=>({...p,[k]:e.target.checked}));
+
+  const handleImage = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setForm(p=>({...p, image:ev.target.result, imagePreview:ev.target.result}));
+    reader.readAsDataURL(file);
+  };
+
   const submit = async()=>{
     if(!form.id||!form.qty) return showToast('商品と入荷数を入力してください');
-    await apiPost(gasUrl,{action:'recordRestock',id:form.id,qty:parseInt(form.qty),cost:form.cost?parseFloat(form.cost):null});
+    await apiPost(gasUrl,{
+      action:'recordRestock',
+      id:form.id, qty:parseInt(form.qty),
+      cost:form.cost?parseFloat(form.cost):null,
+      hasTaxInvoice:form.hasTaxInvoice,
+      paymentReceived:form.paymentReceived,
+      noTaxInvoice:form.noTaxInvoice,
+      image:form.image||null,
+      imageNote:form.imageNote||''
+    });
     const p=data.products.find(x=>x.id===form.id);
     showToast(`「${p?.name}」${form.qty}個を入荷しました`);
-    setForm({id:'',qty:'',cost:''});
+    setForm(initForm);
     setTimeout(reload,1200);
   };
+
   const need = data.products.filter(p=>p.minStock>0&&p.stock<=p.minStock);
+
   return (
     <div>
       <div className="card">
@@ -719,8 +741,52 @@ function Restock({data,gasUrl,reload,showToast}) {
           <div className="form-group"><label>入荷数</label><input type="number" placeholder="0" value={form.qty} onChange={f('qty')}/></div>
           <div className="form-group"><label>仕入単価（変更時のみ）</label><input type="number" placeholder="空欄=変更なし" value={form.cost} onChange={f('cost')}/></div>
         </div>
+
+        {/* 経理チェック */}
+        <div style={{background:'#f5faf4',border:'1px solid #c8d8c4',borderRadius:8,padding:'12px 14px',marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:'#1a3d16',marginBottom:10}}>経理確認（任意）</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:16}}>
+            <label style={{display:'flex',alignItems:'center',gap:6,fontSize:13,cursor:'pointer'}}>
+              <input type="checkbox" checked={form.hasTaxInvoice} onChange={fc('hasTaxInvoice')}/>
+              TAXインボイスあり
+            </label>
+            <label style={{display:'flex',alignItems:'center',gap:6,fontSize:13,cursor:'pointer'}}>
+              <input type="checkbox" checked={form.paymentReceived} onChange={fc('paymentReceived')}/>
+              会社から仕入代金受領済み
+            </label>
+            <label style={{display:'flex',alignItems:'center',gap:6,fontSize:13,cursor:'pointer',color:'var(--muted)'}}>
+              <input type="checkbox" checked={form.noTaxInvoice} onChange={fc('noTaxInvoice')}/>
+              TAXインボイス関係なし
+            </label>
+          </div>
+        </div>
+
+        {/* 画像添付 */}
+        <div style={{background:'#fdfaf0',border:'1px solid #e8d99a',borderRadius:8,padding:'12px 14px',marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:600,color:'#8a6a1a',marginBottom:10}}>画像添付（任意）</div>
+          <div style={{display:'flex',gap:12,alignItems:'flex-start',flexWrap:'wrap'}}>
+            <div>
+              <input type="file" accept="image/*" onChange={handleImage} style={{fontSize:12}}/>
+              {form.image && (
+                <div style={{marginTop:8}}>
+                  <img src={form.imagePreview} alt="preview"
+                    style={{width:120,height:90,objectFit:'cover',borderRadius:6,border:'2px solid #C8A84B',cursor:'pointer'}}
+                    onClick={()=>window.open(form.imagePreview,'_blank')}/>
+                  <div style={{fontSize:11,color:'var(--muted)',marginTop:4}}>クリックで拡大</div>
+                  <button className="btn btn-sm" style={{marginTop:4,fontSize:11}} onClick={()=>setForm(p=>({...p,image:null,imagePreview:null}))}>✕ 削除</button>
+                </div>
+              )}
+            </div>
+            <div className="form-group" style={{flex:1,minWidth:160,margin:0}}>
+              <label>画像メモ</label>
+              <input placeholder="インボイス番号など" value={form.imageNote} onChange={f('imageNote')}/>
+            </div>
+          </div>
+        </div>
+
         <div className="actions"><button className="btn btn-primary" onClick={submit}>入荷を登録</button></div>
       </div>
+
       <div className="card">
         <div className="card-title">要補充リスト ({need.length}件)</div>
         {need.length===0?<div className="empty">補充が必要な商品はありません</div>:
